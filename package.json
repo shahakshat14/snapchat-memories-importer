@@ -1,0 +1,43 @@
+{
+  "name": "snapchat-google-photos-importer",
+  "version": "0.1.0",
+  "description": "A macOS app that merges Snapchat export metadata into media files and uploads them to Google Photos.",
+  "main": "src/main.js",
+  "author": "Akshat Shah",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg",
+    "pack": "electron-builder --mac dir"
+  },
+  "dependencies": {
+    "exiftool-vendored": "^35.20.0",
+    "extract-zip": "^2.0.1",
+    "google-auth-library": "^10.5.0",
+    "mime-types": "^3.0.1"
+  },
+  "devDependencies": {
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.akshat.snapchatgooglephotosimporter",
+    "productName": "Snapchat to Google Photos",
+    "mac": {
+      "category": "public.app-category.photography",
+      "identity": null,
+      "target": [
+        "dmg"
+      ]
+    },
+    "dmg": {
+      "artifactName": "Snapchat-to-Google-Photos-${version}.${ext}"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
+  }
+}

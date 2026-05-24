@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snapchat to Google Photos</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="title-row">
+          <div>
+            <p class="eyebrow">Local Importer</p>
+            <h1>Snapchat to Google Photos</h1>
+          </div>
+          <div class="status-pill" id="statusPill">Ready</div>
+        </div>
+
+        <div class="steps">
+          <button class="step" id="zipButton">
+            <span class="step-index">1</span>
+            <span>
+              <strong>Choose Snapchat zip</strong>
+              <small id="zipPath">No file selected</small>
+            </span>
+          </button>
+
+          <button class="step" id="credentialsButton">
+            <span class="step-index">2</span>
+            <span>
+              <strong>Choose Google OAuth JSON</strong>
+              <small id="credentialsPath">Required for Google login</small>
+            </span>
+          </button>
+
+          <button class="step" id="signInButton">
+            <span class="step-index">3</span>
+            <span>
+              <strong>Sign in with Google</strong>
+              <small id="accountLabel">Not connected</small>
+            </span>
+          </button>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-header">
+            <span id="stageLabel">Waiting</span>
+            <span id="percentLabel">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <p id="message">Pick your Snapchat export zip to begin.</p>
+        </div>
+
+        <div class="actions">
+          <button class="primary" id="startButton">Extract, Merge, Upload</button>
+          <button class="secondary" id="cancelButton">Cancel</button>
+        </div>
+      </section>
+    </main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>
