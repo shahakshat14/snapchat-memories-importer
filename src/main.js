@@ -4,6 +4,8 @@ const fs = require('node:fs/promises');
 const fss = require('node:fs');
 const os = require('node:os');
 const http = require('node:http');
+const { execFile: execFileCallback } = require('node:child_process');
+const { promisify } = require('node:util');
 const extractZip = require('extract-zip');
 const { exiftool } = require('exiftool-vendored');
 const { OAuth2Client } = require('google-auth-library');
@@ -11,6 +13,7 @@ const mime = require('mime-types');
 const importer = require('./importer-core');
 
 const SCOPES = ['https://www.googleapis.com/auth/photoslibrary.appendonly'];
+const execFile = promisify(execFileCallback);
 const MEDIA_EXTENSIONS = new Set([
   '.3g2', '.3gp', '.avif', '.bmp', '.gif', '.heic', '.jpeg', '.jpg', '.m4v',
   '.mov', '.mp4', '.png', '.tif', '.tiff', '.webp'
@@ -86,10 +89,22 @@ ipcMain.handle('prepare-import', async (_event, options) => {
 
 ipcMain.handle('upload-prepared', async () => {
   cancelled = false;
-  if (!preparedImport) throw new Error('Prepare and review a preview before uploading.');
+  ensurePreparedReady();
   const accessToken = await getValidAccessToken();
   if (!accessToken) throw new Error('Sign in with Google before uploading.');
   return uploadPreparedImport(accessToken);
+});
+
+ipcMain.handle('export-prepared-zip', async () => {
+  cancelled = false;
+  ensurePreparedReady();
+  return exportPreparedZip();
+});
+
+ipcMain.handle('import-apple-photos', async () => {
+  cancelled = false;
+  ensurePreparedReady();
+  return importPreparedIntoApplePhotos();
 });
 
 async function prepareImportPreview(options) {
@@ -161,6 +176,48 @@ async function uploadPreparedImport(accessToken) {
   delete report.merged;
   await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
   progress('complete', 100, `Upload complete. Report saved to ${reportPath}`);
+  return report;
+}
+
+async function exportPreparedZip() {
+  const zipPath = path.join(
+    path.dirname(preparedImport.mergedDir),
+    `${path.basename(preparedImport.mergedDir)}-merged-exif.zip`
+  );
+  progress('exporting', 5, 'Creating merged EXIF zip');
+  await execFile('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', preparedImport.mergedDir, zipPath]);
+  const report = {
+    ...preparedImport,
+    exportedZipAt: new Date().toISOString(),
+    exportedZipPath: zipPath
+  };
+  delete report.merged;
+  await fs.writeFile(path.join(preparedImport.mergedDir, 'zip-export-report.json'), JSON.stringify(report, null, 2));
+  progress('complete', 100, `Merged EXIF zip created at ${zipPath}`);
+  return report;
+}
+
+async function importPreparedIntoApplePhotos() {
+  const mediaPaths = preparedImport.merged.map((item) => item.mergedPath).filter((file) => fss.existsSync(file));
+  if (!mediaPaths.length) throw new Error('No merged media files are available to import.');
+
+  progress('apple-photos', 5, `Opening Apple Photos and importing ${mediaPaths.length} files`);
+  let imported = 0;
+  for (const chunk of chunkArray(mediaPaths, 100)) {
+    checkCancelled();
+    await execFile('/usr/bin/osascript', ['-e', buildPhotosImportScript(chunk)]);
+    imported += chunk.length;
+    progress('apple-photos', 5 + Math.floor((imported / mediaPaths.length) * 90), `Imported ${imported} of ${mediaPaths.length} into Apple Photos`);
+  }
+
+  const report = {
+    ...preparedImport,
+    applePhotosImportedAt: new Date().toISOString(),
+    applePhotosImportedFiles: imported
+  };
+  delete report.merged;
+  await fs.writeFile(path.join(preparedImport.mergedDir, 'apple-photos-import-report.json'), JSON.stringify(report, null, 2));
+  progress('complete', 100, `Imported ${imported} files into Apple Photos`);
   return report;
 }
 
@@ -307,6 +364,11 @@ function progress(stage, percent, message) {
   mainWindow?.webContents.send('progress', { stage, percent, message });
 }
 
+function ensurePreparedReady() {
+  if (!preparedImport) throw new Error('Prepare and review a preview first.');
+  if (!preparedImport.readyToUpload) throw new Error('Preview is not ready because merged verification failed.');
+}
+
 function checkCancelled() {
   if (cancelled) throw new Error('Import cancelled.');
 }
@@ -317,4 +379,22 @@ function formatFolderDate(date) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function chunkArray(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function buildPhotosImportScript(files) {
+  const fileList = files.map((file) => `POSIX file ${JSON.stringify(file)}`).join(', ');
+  return [
+    'tell application "Photos"',
+    'activate',
+    `import {${fileList}} skip check duplicates yes`,
+    'end tell'
+  ].join('\n');
 }
