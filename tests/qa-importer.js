@@ -53,6 +53,7 @@ async function testZipWithEmbeddedMedia(tempRoot) {
   await extractZip(zipPath, { dir: extractDir });
   const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
   const verification = await importer.verifyMergedMedia(result.media, 10);
+  const exportedZip = path.join(fixture, 'merged-export.zip');
 
   assert.equal(result.media.length, 1, 'embedded zip should produce one merged media file');
   assert.equal(result.media[0].source, 'zip-media');
@@ -61,6 +62,12 @@ async function testZipWithEmbeddedMedia(tempRoot) {
   assert.equal(verification.withGps, 1, 'preview verification should see embedded GPS');
   assert.equal(verification.missingFiles, 0, 'preview verification should not have missing files');
   await assertExif(result.media[0].mergedPath, {
+    datePrefix: '2024:01:02 03:04:05',
+    latitude: 43.6532,
+    longitude: -79.3832
+  });
+  exportMergedZip(mergedDir, exportedZip);
+  await assertExportedZipContainsExif(exportedZip, path.basename(mergedDir), 'snap-local.jpg', {
     datePrefix: '2024:01:02 03:04:05',
     latitude: 43.6532,
     longitude: -79.3832
@@ -120,6 +127,17 @@ async function assertExif(file, expected) {
   assert.ok(Math.abs(Number(tags.GPSLongitude) - expected.longitude) < 0.0002, `wrong GPSLongitude: ${tags.GPSLongitude}`);
 }
 
+async function assertExportedZipContainsExif(zipPath, folderName, fileName, expected) {
+  const extractDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snapchat-export-zip-qa-'));
+  try {
+    await extractZip(zipPath, { dir: extractDir });
+    const exportedFile = path.join(extractDir, folderName, fileName);
+    await assertExif(exportedFile, expected);
+  } finally {
+    await fs.rm(extractDir, { recursive: true, force: true });
+  }
+}
+
 async function createMediaServer() {
   const server = http.createServer((request, response) => {
     if (request.url !== '/snap-remote.jpg') {
@@ -145,6 +163,10 @@ async function zipFixture(sourceDir, zipPath) {
   await fs.mkdir(path.dirname(zipPath), { recursive: true });
   execFileSync('/usr/bin/zip', ['-qr', zipPath, '.'], { cwd: sourceDir });
   return zipPath;
+}
+
+function exportMergedZip(mergedDir, zipPath) {
+  execFileSync('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', mergedDir, zipPath]);
 }
 
 main().catch(async (error) => {

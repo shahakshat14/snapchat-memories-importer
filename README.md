@@ -1,14 +1,20 @@
-# Snapchat to Google Photos
+# Snapchat Memories Importer
 
-A macOS desktop app that imports a Snapchat data export into Google Photos.
+A macOS desktop app that imports a Snapchat data export into Google Photos, Apple Photos, or a portable merged EXIF zip.
 
-The app asks for:
+The app can ask for:
 
 1. A Snapchat export `.zip`
-2. A Google OAuth Desktop client JSON
-3. Google Photos login
+2. A Google OAuth Desktop client JSON, only if uploading to Google Photos
+3. Google Photos login, only if uploading to Google Photos
 
-Then it extracts the export, finds photos/videos and metadata, writes available EXIF/XMP date and GPS data into copied media files, shows a preview for confirmation, and uploads the approved media to Google Photos.
+Then it extracts the export, finds photos/videos and metadata, writes available EXIF/XMP date and GPS data into copied media files, and shows a preview for confirmation.
+
+After reviewing the preview, you can:
+
+- Export a new `.zip` containing the merged EXIF media.
+- Import the merged media into Apple Photos.
+- Upload the merged media to Google Photos.
 
 ## Why Google OAuth JSON Is Required
 
@@ -39,7 +45,7 @@ Run the importer QA fixtures:
 npm run qa
 ```
 
-The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, verifies the preview summary, and reads the output back with ExifTool. It covers both media embedded in the zip and metadata-only exports with download links.
+The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, verifies the preview summary, exports a merged zip, re-extracts it, and reads the output back with ExifTool. It covers both media embedded in the zip and metadata-only exports with download links.
 
 ## Build DMG
 
@@ -59,6 +65,14 @@ Google Photos upload uses the current two-step flow:
 2. Create media items with `mediaItems:batchCreate`.
 
 The app creates media items serially in batches of up to 50, matching Google's upload guidance.
+
+## Apple Photos Notes
+
+Apple Photos import uses the local macOS Photos app through AppleScript. macOS may ask you to grant automation permission the first time the app controls Photos.
+
+## Merged ZIP Notes
+
+The merged ZIP is created next to the preview folder in Documents. It contains the merged media folder with EXIF/XMP already written, so you can manually upload it anywhere.
 
 ## Snapchat Export Notes
 

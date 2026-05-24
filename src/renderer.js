@@ -12,6 +12,8 @@ const elements = {
   signInButton: document.querySelector('#signInButton'),
   prepareButton: document.querySelector('#prepareButton'),
   uploadButton: document.querySelector('#uploadButton'),
+  zipExportButton: document.querySelector('#zipExportButton'),
+  applePhotosButton: document.querySelector('#applePhotosButton'),
   cancelButton: document.querySelector('#cancelButton'),
   openMergedButton: document.querySelector('#openMergedButton'),
   reviewCheckbox: document.querySelector('#reviewCheckbox'),
@@ -104,6 +106,40 @@ elements.uploadButton.addEventListener('click', async () => {
   }
 });
 
+elements.zipExportButton.addEventListener('click', async () => {
+  try {
+    setBusy(true, 'Creating merged ZIP');
+    const report = await window.snapImporter.exportPreparedZip();
+    setProgress({
+      stage: 'complete',
+      percent: 100,
+      message: `Merged EXIF zip created at ${report.exportedZipPath}`
+    });
+  } catch (error) {
+    setError(error);
+  } finally {
+    setBusy(false);
+    updateButtons();
+  }
+});
+
+elements.applePhotosButton.addEventListener('click', async () => {
+  try {
+    setBusy(true, 'Importing to Apple Photos');
+    const report = await window.snapImporter.importApplePhotos();
+    setProgress({
+      stage: 'complete',
+      percent: 100,
+      message: `Imported ${report.applePhotosImportedFiles} files into Apple Photos.`
+    });
+  } catch (error) {
+    setError(error);
+  } finally {
+    setBusy(false);
+    updateButtons();
+  }
+});
+
 elements.openMergedButton.addEventListener('click', async () => {
   if (!state.preview?.mergedDir) return;
   try {
@@ -183,9 +219,12 @@ function setError(error) {
 }
 
 function updateButtons() {
+  const reviewedReady = state.preview?.readyToUpload && elements.reviewCheckbox.checked;
   elements.signInButton.disabled = state.running || !state.credentialsPath;
   elements.prepareButton.disabled = state.running || !state.zipPath;
-  elements.uploadButton.disabled = state.running || !state.preview?.readyToUpload || !state.signedIn || !elements.reviewCheckbox.checked;
+  elements.zipExportButton.disabled = state.running || !reviewedReady;
+  elements.applePhotosButton.disabled = state.running || !reviewedReady;
+  elements.uploadButton.disabled = state.running || !reviewedReady || !state.signedIn;
   elements.cancelButton.disabled = !state.running;
   elements.zipButton.disabled = state.running;
   elements.credentialsButton.disabled = state.running;
