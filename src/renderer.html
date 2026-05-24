@@ -54,8 +54,42 @@
           <p id="message">Pick your Snapchat export zip to begin.</p>
         </div>
 
+        <section class="preview" id="previewPanel" hidden>
+          <div class="preview-head">
+            <div>
+              <h2>Preview</h2>
+              <p id="previewLocation"></p>
+            </div>
+            <button class="secondary compact" id="openMergedButton">Open Folder</button>
+          </div>
+          <div class="metrics">
+            <div><strong id="totalMetric">0</strong><small>Merged</small></div>
+            <div><strong id="dateMetric">0</strong><small>With Date</small></div>
+            <div><strong id="gpsMetric">0</strong><small>With GPS</small></div>
+            <div><strong id="missingMetric">0</strong><small>Missing</small></div>
+          </div>
+          <div class="sample-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Source</th>
+                  <th>Date</th>
+                  <th>GPS</th>
+                </tr>
+              </thead>
+              <tbody id="sampleRows"></tbody>
+            </table>
+          </div>
+          <label class="review-check">
+            <input type="checkbox" id="reviewCheckbox" />
+            <span>I reviewed the merged files and metadata preview</span>
+          </label>
+        </section>
+
         <div class="actions">
-          <button class="primary" id="startButton">Extract, Merge, Upload</button>
+          <button class="primary" id="prepareButton">Prepare Preview</button>
+          <button class="primary" id="uploadButton">Confirm & Upload</button>
           <button class="secondary" id="cancelButton">Cancel</button>
         </div>
       </section>

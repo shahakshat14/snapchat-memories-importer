@@ -8,7 +8,7 @@ The app asks for:
 2. A Google OAuth Desktop client JSON
 3. Google Photos login
 
-Then it extracts the export, finds photos/videos and metadata, writes available EXIF/XMP date and GPS data into copied media files, and uploads the merged media to Google Photos.
+Then it extracts the export, finds photos/videos and metadata, writes available EXIF/XMP date and GPS data into copied media files, shows a preview for confirmation, and uploads the approved media to Google Photos.
 
 ## Why Google OAuth JSON Is Required
 
@@ -39,7 +39,7 @@ Run the importer QA fixtures:
 npm run qa
 ```
 
-The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, and reads the output back with ExifTool. It covers both media embedded in the zip and metadata-only exports with download links.
+The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, verifies the preview summary, and reads the output back with ExifTool. It covers both media embedded in the zip and metadata-only exports with download links.
 
 ## Build DMG
 
