@@ -9,11 +9,11 @@
   "scripts": {
     "start": "electron .",
     "qa": "node tests/qa-importer.js",
-    "dist": "electron-builder --mac dmg",
-    "dist:mac": "electron-builder --mac dmg",
-    "dist:win": "electron-builder --win nsis --x64",
-    "pack": "electron-builder --mac dir",
-    "pack:win": "electron-builder --win dir --x64"
+    "dist": "electron-builder --mac dmg --publish never",
+    "dist:mac": "electron-builder --mac dmg --publish never",
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "pack": "electron-builder --mac dir --publish never",
+    "pack:win": "electron-builder --win dir --x64 --publish never"
   },
   "dependencies": {
     "archiver": "^7.0.1",
