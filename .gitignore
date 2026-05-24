@@ -3,6 +3,12 @@ node_modules/
 dist/
 out/
 *.log
+*.pem
+*.p12
+.env
+.env.*
 .google-token.json
+.google-photos-token.json
 work/
 client_secret.json
+client_secret*.json

@@ -157,6 +157,9 @@ elements.cancelButton.addEventListener('click', async () => {
 });
 
 window.snapImporter.onProgress((payload) => setProgress(payload));
+if (window.snapImporter.platform !== 'darwin') {
+  elements.applePhotosButton.title = 'Apple Photos import is only available on macOS.';
+}
 updateButtons();
 
 function renderPreview(preview) {
@@ -223,7 +226,7 @@ function updateButtons() {
   elements.signInButton.disabled = state.running || !state.credentialsPath;
   elements.prepareButton.disabled = state.running || !state.zipPath;
   elements.zipExportButton.disabled = state.running || !reviewedReady;
-  elements.applePhotosButton.disabled = state.running || !reviewedReady;
+  elements.applePhotosButton.disabled = state.running || !reviewedReady || window.snapImporter.platform !== 'darwin';
   elements.uploadButton.disabled = state.running || !reviewedReady || !state.signedIn;
   elements.cancelButton.disabled = !state.running;
   elements.zipButton.disabled = state.running;

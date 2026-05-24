@@ -7,6 +7,7 @@ const http = require('node:http');
 const { execFile: execFileCallback } = require('node:child_process');
 const { promisify } = require('node:util');
 const extractZip = require('extract-zip');
+const archiver = require('archiver');
 const { exiftool } = require('exiftool-vendored');
 const { OAuth2Client } = require('google-auth-library');
 const mime = require('mime-types');
@@ -29,7 +30,7 @@ function createWindow() {
     height: 720,
     minWidth: 820,
     minHeight: 640,
-    title: 'Snapchat to Google Photos',
+    title: 'Snapchat Memories Importer',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
     }
@@ -185,7 +186,7 @@ async function exportPreparedZip() {
     `${path.basename(preparedImport.mergedDir)}-merged-exif.zip`
   );
   progress('exporting', 5, 'Creating merged EXIF zip');
-  await execFile('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', preparedImport.mergedDir, zipPath]);
+  await createZipFromFolder(preparedImport.mergedDir, zipPath);
   const report = {
     ...preparedImport,
     exportedZipAt: new Date().toISOString(),
@@ -198,6 +199,9 @@ async function exportPreparedZip() {
 }
 
 async function importPreparedIntoApplePhotos() {
+  if (process.platform !== 'darwin') {
+    throw new Error('Apple Photos import is only available on macOS.');
+  }
   const mediaPaths = preparedImport.merged.map((item) => item.mergedPath).filter((file) => fss.existsSync(file));
   if (!mediaPaths.length) throw new Error('No merged media files are available to import.');
 
@@ -397,4 +401,18 @@ function buildPhotosImportScript(files) {
     `import {${fileList}} skip check duplicates yes`,
     'end tell'
   ].join('\n');
+}
+
+async function createZipFromFolder(sourceDir, zipPath) {
+  await fs.mkdir(path.dirname(zipPath), { recursive: true });
+  return new Promise((resolve, reject) => {
+    const output = fss.createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    output.on('close', resolve);
+    output.on('error', reject);
+    archive.on('error', reject);
+    archive.pipe(output);
+    archive.directory(sourceDir, path.basename(sourceDir));
+    archive.finalize();
+  });
 }
