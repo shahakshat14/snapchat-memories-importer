@@ -52,9 +52,14 @@ async function testZipWithEmbeddedMedia(tempRoot) {
   await fs.mkdir(extractDir, { recursive: true });
   await extractZip(zipPath, { dir: extractDir });
   const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+  const verification = await importer.verifyMergedMedia(result.media, 10);
 
   assert.equal(result.media.length, 1, 'embedded zip should produce one merged media file');
   assert.equal(result.media[0].source, 'zip-media');
+  assert.equal(verification.total, 1, 'preview verification should see one file');
+  assert.equal(verification.withDate, 1, 'preview verification should see embedded date');
+  assert.equal(verification.withGps, 1, 'preview verification should see embedded GPS');
+  assert.equal(verification.missingFiles, 0, 'preview verification should not have missing files');
   await assertExif(result.media[0].mergedPath, {
     datePrefix: '2024:01:02 03:04:05',
     latitude: 43.6532,
@@ -87,10 +92,15 @@ async function testZipWithDownloadLinks(tempRoot) {
     await fs.mkdir(extractDir, { recursive: true });
     await extractZip(zipPath, { dir: extractDir });
     const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+    const verification = await importer.verifyMergedMedia(result.media, 10);
 
     assert.equal(result.mediaFiles.length, 0, 'link-only zip should not need embedded media');
     assert.equal(result.media.length, 1, 'link-only zip should download and merge one media file');
     assert.equal(result.media[0].source, 'download-link');
+    assert.equal(verification.total, 1, 'preview verification should see downloaded file');
+    assert.equal(verification.withDate, 1, 'preview verification should see downloaded date');
+    assert.equal(verification.withGps, 1, 'preview verification should see downloaded GPS');
+    assert.equal(verification.missingFiles, 0, 'preview verification should not have missing downloaded files');
     await assertExif(result.media[0].mergedPath, {
       datePrefix: '2021:06:07 08:09:10',
       latitude: 37.7749,

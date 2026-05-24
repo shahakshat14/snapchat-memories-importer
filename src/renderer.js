@@ -2,15 +2,19 @@ const state = {
   zipPath: null,
   credentialsPath: null,
   signedIn: false,
-  running: false
+  running: false,
+  preview: null
 };
 
 const elements = {
   zipButton: document.querySelector('#zipButton'),
   credentialsButton: document.querySelector('#credentialsButton'),
   signInButton: document.querySelector('#signInButton'),
-  startButton: document.querySelector('#startButton'),
+  prepareButton: document.querySelector('#prepareButton'),
+  uploadButton: document.querySelector('#uploadButton'),
   cancelButton: document.querySelector('#cancelButton'),
+  openMergedButton: document.querySelector('#openMergedButton'),
+  reviewCheckbox: document.querySelector('#reviewCheckbox'),
   zipPath: document.querySelector('#zipPath'),
   credentialsPath: document.querySelector('#credentialsPath'),
   accountLabel: document.querySelector('#accountLabel'),
@@ -18,15 +22,24 @@ const elements = {
   stageLabel: document.querySelector('#stageLabel'),
   percentLabel: document.querySelector('#percentLabel'),
   progressBar: document.querySelector('#progressBar'),
-  message: document.querySelector('#message')
+  message: document.querySelector('#message'),
+  previewPanel: document.querySelector('#previewPanel'),
+  previewLocation: document.querySelector('#previewLocation'),
+  totalMetric: document.querySelector('#totalMetric'),
+  dateMetric: document.querySelector('#dateMetric'),
+  gpsMetric: document.querySelector('#gpsMetric'),
+  missingMetric: document.querySelector('#missingMetric'),
+  sampleRows: document.querySelector('#sampleRows')
 };
 
 elements.zipButton.addEventListener('click', async () => {
   const zipPath = await window.snapImporter.chooseZip();
   if (!zipPath) return;
   state.zipPath = zipPath;
+  state.preview = null;
   elements.zipPath.textContent = zipPath;
-  setMessage('Snapchat zip selected.');
+  hidePreview();
+  setMessage('Snapchat zip selected. Prepare a preview before uploading.');
   updateButtons();
 });
 
@@ -34,7 +47,9 @@ elements.credentialsButton.addEventListener('click', async () => {
   const credentialsPath = await window.snapImporter.chooseCredentials();
   if (!credentialsPath) return;
   state.credentialsPath = credentialsPath;
+  state.signedIn = false;
   elements.credentialsPath.textContent = credentialsPath;
+  elements.accountLabel.textContent = 'Not connected';
   setMessage('Google OAuth JSON selected.');
   updateButtons();
 });
@@ -45,7 +60,7 @@ elements.signInButton.addEventListener('click', async () => {
     const account = await window.snapImporter.signIn(state.credentialsPath);
     state.signedIn = true;
     elements.accountLabel.textContent = account.email;
-    setProgress({ stage: 'connected', percent: 0, message: 'Google Photos connected.' });
+    setProgress({ stage: 'connected', percent: 0, message: 'Google Photos connected. Upload is available after preview approval.' });
   } catch (error) {
     setError(error);
   } finally {
@@ -54,17 +69,15 @@ elements.signInButton.addEventListener('click', async () => {
   }
 });
 
-elements.startButton.addEventListener('click', async () => {
+elements.prepareButton.addEventListener('click', async () => {
   try {
-    setBusy(true, 'Starting import');
-    const report = await window.snapImporter.startImport({
-      zipPath: state.zipPath,
-      credentialsPath: state.credentialsPath
-    });
+    setBusy(true, 'Preparing preview');
+    state.preview = await window.snapImporter.prepareImport({ zipPath: state.zipPath });
+    renderPreview(state.preview);
     setProgress({
-      stage: 'complete',
+      stage: 'preview-ready',
       percent: 100,
-      message: `Uploaded ${report.uploadedFiles} files. Merged folder: ${report.mergedDir}`
+      message: `Preview ready. Review ${state.preview.verification.total} files, then confirm upload.`
     });
   } catch (error) {
     setError(error);
@@ -73,6 +86,34 @@ elements.startButton.addEventListener('click', async () => {
     updateButtons();
   }
 });
+
+elements.uploadButton.addEventListener('click', async () => {
+  try {
+    setBusy(true, 'Uploading reviewed files');
+    const report = await window.snapImporter.uploadPrepared();
+    setProgress({
+      stage: 'complete',
+      percent: 100,
+      message: `Uploaded ${report.uploadedFiles} files. Report saved in ${report.mergedDir}`
+    });
+  } catch (error) {
+    setError(error);
+  } finally {
+    setBusy(false);
+    updateButtons();
+  }
+});
+
+elements.openMergedButton.addEventListener('click', async () => {
+  if (!state.preview?.mergedDir) return;
+  try {
+    await window.snapImporter.openPath(state.preview.mergedDir);
+  } catch (error) {
+    setError(error);
+  }
+});
+
+elements.reviewCheckbox.addEventListener('change', () => updateButtons());
 
 elements.cancelButton.addEventListener('click', async () => {
   await window.snapImporter.cancelImport();
@@ -81,6 +122,41 @@ elements.cancelButton.addEventListener('click', async () => {
 
 window.snapImporter.onProgress((payload) => setProgress(payload));
 updateButtons();
+
+function renderPreview(preview) {
+  const verification = preview.verification;
+  elements.previewPanel.hidden = false;
+  elements.reviewCheckbox.checked = false;
+  elements.previewLocation.textContent = preview.mergedDir;
+  elements.totalMetric.textContent = verification.total;
+  elements.dateMetric.textContent = verification.withDate;
+  elements.gpsMetric.textContent = verification.withGps;
+  elements.missingMetric.textContent = verification.missingFiles;
+  elements.sampleRows.innerHTML = '';
+
+  for (const item of verification.sample) {
+    const row = document.createElement('tr');
+    row.append(
+      cell(item.fileName),
+      cell(item.source),
+      cell(item.date || 'Missing'),
+      cell(item.latitude === null || item.longitude === null ? 'Missing' : `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`)
+    );
+    elements.sampleRows.append(row);
+  }
+}
+
+function hidePreview() {
+  elements.previewPanel.hidden = true;
+  elements.reviewCheckbox.checked = false;
+  elements.sampleRows.innerHTML = '';
+}
+
+function cell(value) {
+  const element = document.createElement('td');
+  element.textContent = value;
+  return element;
+}
 
 function setProgress({ stage, percent, message }) {
   const safePercent = Math.max(0, Math.min(100, percent || 0));
@@ -108,10 +184,12 @@ function setError(error) {
 
 function updateButtons() {
   elements.signInButton.disabled = state.running || !state.credentialsPath;
-  elements.startButton.disabled = state.running || !state.zipPath || !state.signedIn;
+  elements.prepareButton.disabled = state.running || !state.zipPath;
+  elements.uploadButton.disabled = state.running || !state.preview?.readyToUpload || !state.signedIn || !elements.reviewCheckbox.checked;
   elements.cancelButton.disabled = !state.running;
   elements.zipButton.disabled = state.running;
   elements.credentialsButton.disabled = state.running;
+  elements.openMergedButton.disabled = state.running || !state.preview?.mergedDir;
 }
 
 function titleCase(value) {

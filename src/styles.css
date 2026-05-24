@@ -72,7 +72,8 @@ h1 {
   font-size: 13px;
 }
 
-.status-pill.complete {
+.status-pill.complete,
+.status-pill.preview-ready {
   background: #0b7a4b;
 }
 
@@ -141,6 +142,105 @@ h1 {
   background: #fbfaf7;
 }
 
+.preview {
+  margin: 0 0 24px;
+  padding: 18px;
+  border: 1px solid #ded8ce;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.preview p {
+  margin: 0;
+  color: #766b60;
+  overflow-wrap: anywhere;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.metrics div {
+  border: 1px solid #e2dbd0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfaf7;
+}
+
+.metrics strong,
+.metrics small {
+  display: block;
+}
+
+.metrics strong {
+  font-size: 22px;
+}
+
+.metrics small {
+  color: #766b60;
+  margin-top: 2px;
+}
+
+.sample-table-wrap {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #e2dbd0;
+  border-radius: 8px;
+}
+
+.review-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-weight: 800;
+  color: #2f2a25;
+}
+
+.review-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: #201f1d;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  padding: 10px;
+  border-bottom: 1px solid #eee8df;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  background: #f7f3ed;
+  font-size: 12px;
+  color: #5d5249;
+}
+
 .progress-header {
   display: flex;
   justify-content: space-between;
@@ -196,6 +296,11 @@ h1 {
   color: #201f1d;
 }
 
+.compact {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
 @media (max-width: 720px) {
   .shell {
     padding: 16px;
@@ -206,8 +311,13 @@ h1 {
   }
 
   .title-row,
+  .preview-head,
   .actions {
     flex-direction: column;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   h1 {

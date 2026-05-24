@@ -18,6 +18,7 @@ const MEDIA_EXTENSIONS = new Set([
 
 let mainWindow;
 let cancelled = false;
+let preparedImport = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -70,19 +71,33 @@ ipcMain.handle('cancel-import', () => {
   return true;
 });
 
-ipcMain.handle('start-import', async (_event, options) => {
-  cancelled = false;
-  const accessToken = await getValidAccessToken();
-  if (!accessToken) throw new Error('Sign in with Google before importing.');
-  return runImport({ ...options, accessToken });
+ipcMain.handle('open-path', async (_event, targetPath) => {
+  if (!targetPath) return null;
+  const result = await shell.openPath(targetPath);
+  if (result) throw new Error(result);
+  return true;
 });
 
-async function runImport(options) {
+ipcMain.handle('prepare-import', async (_event, options) => {
+  cancelled = false;
+  preparedImport = null;
+  return prepareImportPreview(options);
+});
+
+ipcMain.handle('upload-prepared', async () => {
+  cancelled = false;
+  if (!preparedImport) throw new Error('Prepare and review a preview before uploading.');
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) throw new Error('Sign in with Google before uploading.');
+  return uploadPreparedImport(accessToken);
+});
+
+async function prepareImportPreview(options) {
   const startedAt = new Date();
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'snapchat-google-photos-'));
   const extractDir = path.join(workspace, 'extracted');
   const mergedDir = path.join(app.getPath('documents'), 'Snapchat Google Photos Import', formatFolderDate(startedAt));
-  const reportPath = path.join(mergedDir, 'import-report.json');
+  const previewReportPath = path.join(mergedDir, 'preview-report.json');
   await fs.mkdir(extractDir, { recursive: true });
   await fs.mkdir(mergedDir, { recursive: true });
 
@@ -103,28 +118,50 @@ async function runImport(options) {
     progress('merging', 18, `Preparing ${matched.length + downloadable.length} Snapchat memories`);
     const merged = await importer.materializeMedia(matches, metadataEntries, mergedDir, (complete, total) => {
       checkCancelled();
-      progress('merging', 18 + Math.floor((complete / Math.max(total, 1)) * 22), `Merged ${complete} of ${total}`);
+      progress('merging', 18 + Math.floor((complete / Math.max(total, 1)) * 42), `Merged ${complete} of ${total}`);
     });
 
-    progress('uploading', 42, `Uploading ${merged.length} files to Google Photos`);
-    const uploadResults = await uploadToGooglePhotos(merged, options.accessToken);
-    const report = {
+    progress('verifying', 72, 'Verifying merged EXIF/XMP metadata');
+    const verification = await importer.verifyMergedMedia(merged, 25);
+    const preview = {
       startedAt: startedAt.toISOString(),
       zipPath: options.zipPath,
       extractedMediaFiles: mediaFiles.length,
       metadataEntries: metadataEntries.length,
       matchedFiles: matched.length,
       downloadedFromMetadataLinks: merged.filter((item) => item.source === 'download-link').length,
+      unmatchedEmbeddedMediaFiles: matches.filter((match) => !match.metadata).length,
       mergedDir,
-      uploadedFiles: uploadResults.filter((result) => result.status === 'created').length,
-      results: uploadResults
+      previewReportPath,
+      verification,
+      readyToUpload: verification.total > 0 && verification.missingFiles === 0
     };
-    await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
-    progress('complete', 100, `Done. Merged files and report saved to ${mergedDir}`);
-    return report;
+    await fs.writeFile(previewReportPath, JSON.stringify(preview, null, 2));
+    preparedImport = {
+      ...preview,
+      merged
+    };
+    progress('preview-ready', 100, `Preview ready. Review ${merged.length} merged files before uploading.`);
+    return preview;
   } finally {
     await fs.rm(workspace, { recursive: true, force: true });
   }
+}
+
+async function uploadPreparedImport(accessToken) {
+  const reportPath = path.join(preparedImport.mergedDir, 'import-report.json');
+  progress('uploading', 2, `Uploading ${preparedImport.merged.length} reviewed files to Google Photos`);
+  const uploadResults = await uploadToGooglePhotos(preparedImport.merged, accessToken);
+  const report = {
+    ...preparedImport,
+    uploadedAt: new Date().toISOString(),
+    uploadedFiles: uploadResults.filter((result) => result.status === 'created').length,
+    results: uploadResults
+  };
+  delete report.merged;
+  await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
+  progress('complete', 100, `Upload complete. Report saved to ${reportPath}`);
+  return report;
 }
 
 async function signInWithGoogle(credentialsPath) {
@@ -183,7 +220,7 @@ async function uploadToGooglePhotos(merged, accessToken) {
         uploadToken
       }
     });
-    progress('uploading', 42 + Math.floor(((index + 1) / Math.max(merged.length, 1)) * 45), `Uploaded bytes ${index + 1} of ${merged.length}`);
+    progress('uploading', 2 + Math.floor(((index + 1) / Math.max(merged.length, 1)) * 90), `Uploaded bytes ${index + 1} of ${merged.length}`);
     if (batch.length === 50) {
       results.push(...await createMediaItems(batch, accessToken));
       batch = [];

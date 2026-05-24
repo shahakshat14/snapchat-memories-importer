@@ -31,6 +31,49 @@ async function prepareMergedMedia({ extractedDir, mergedDir, onProgress = () => 
   };
 }
 
+async function verifyMergedMedia(media, sampleSize = 25) {
+  const sample = [];
+  let withDate = 0;
+  let withGps = 0;
+  let missingFiles = 0;
+  const sourceCounts = {};
+
+  for (const item of media) {
+    sourceCounts[item.source] = (sourceCounts[item.source] || 0) + 1;
+    if (!fss.existsSync(item.mergedPath)) {
+      missingFiles += 1;
+      continue;
+    }
+
+    const tags = await exiftool.read(item.mergedPath);
+    const hasDate = Boolean(tags.DateTimeOriginal?.rawValue || tags.DateCreated?.rawValue);
+    const hasGps = Number.isFinite(Number(tags.GPSLatitude)) && Number.isFinite(Number(tags.GPSLongitude));
+    if (hasDate) withDate += 1;
+    if (hasGps) withGps += 1;
+
+    if (sample.length < sampleSize) {
+      sample.push({
+        fileName: path.basename(item.mergedPath),
+        source: item.source,
+        matchedBy: item.matchedBy,
+        date: tags.DateTimeOriginal?.rawValue || tags.DateCreated?.rawValue || null,
+        latitude: Number.isFinite(Number(tags.GPSLatitude)) ? Number(tags.GPSLatitude) : null,
+        longitude: Number.isFinite(Number(tags.GPSLongitude)) ? Number(tags.GPSLongitude) : null,
+        path: item.mergedPath
+      });
+    }
+  }
+
+  return {
+    total: media.length,
+    withDate,
+    withGps,
+    missingFiles,
+    sourceCounts,
+    sample
+  };
+}
+
 async function materializeMedia(directMatches, metadataEntries, mergedDir, onProgress = () => {}) {
   await fs.mkdir(mergedDir, { recursive: true });
   const usedMetadata = new Set();
@@ -364,6 +407,7 @@ async function uniqueDestination(candidate) {
 module.exports = {
   MEDIA_EXTENSIONS,
   prepareMergedMedia,
+  verifyMergedMedia,
   materializeMedia,
   loadMetadataEntries,
   buildMatches,
