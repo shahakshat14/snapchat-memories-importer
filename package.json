@@ -8,6 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
+    "qa": "node tests/qa-importer.js",
     "dist": "electron-builder --mac dmg",
     "pack": "electron-builder --mac dir"
   },

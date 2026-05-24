@@ -31,6 +31,16 @@ npm install
 npm start
 ```
 
+## QA
+
+Run the importer QA fixtures:
+
+```bash
+npm run qa
+```
+
+The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, and reads the output back with ExifTool. It covers both media embedded in the zip and metadata-only exports with download links.
+
 ## Build DMG
 
 ```bash
@@ -49,3 +59,12 @@ Google Photos upload uses the current two-step flow:
 2. Create media items with `mediaItems:batchCreate`.
 
 The app creates media items serially in batches of up to 50, matching Google's upload guidance.
+
+## Snapchat Export Notes
+
+Snapchat documents that `My Data` downloads arrive as a zip file. For Memories-only exports, Snapchat says to extract the zip, open `index.html`, choose **Memories**, and download individual Memories or all Memories from that page.
+
+Because of that, the importer supports both export shapes:
+
+- Media files already embedded inside the zip, with JSON/CSV metadata matched by filename, stem, or SHA-256.
+- Metadata or HTML files that include download links for the actual Memories media.
