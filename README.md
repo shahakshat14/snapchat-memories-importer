@@ -1,6 +1,6 @@
 # Snapchat Memories Importer
 
-A macOS desktop app that imports a Snapchat data export into Google Photos, Apple Photos, or a portable merged EXIF zip.
+A desktop app that imports a Snapchat data export into Google Photos, Apple Photos, or a portable merged EXIF zip.
 
 The app can ask for:
 
@@ -8,7 +8,7 @@ The app can ask for:
 2. A Google OAuth Desktop client JSON, only if uploading to Google Photos
 3. Google Photos login, only if uploading to Google Photos
 
-Then it extracts the export, finds photos/videos and metadata, writes available EXIF/XMP date and GPS data into copied media files, and shows a preview for confirmation.
+Then it extracts the export, finds photos/videos and metadata, writes available EXIF/XMP date and GPS data into copied media files, and shows a preview for confirmation before any export/import/upload action.
 
 After reviewing the preview, you can:
 
@@ -50,12 +50,20 @@ The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP m
 ## Build DMG
 
 ```bash
-npm run dist
+npm run dist:mac
 ```
 
 The DMG will be created in `dist/`.
 
 The local DMG is unsigned and not notarized. On first launch, macOS may require right-clicking the app and choosing **Open**, or allowing it in Privacy & Security settings.
+
+## Build Windows EXE
+
+```bash
+npm run dist:win
+```
+
+The Windows installer will be created in `dist/`. The easiest supported way to build the Windows EXE is on Windows or through the included GitHub Actions workflow.
 
 ## Google Photos API Notes
 
@@ -73,6 +81,22 @@ Apple Photos import uses the local macOS Photos app through AppleScript. macOS m
 ## Merged ZIP Notes
 
 The merged ZIP is created next to the preview folder in Documents. It contains the merged media folder with EXIF/XMP already written, so you can manually upload it anywhere.
+
+## Security and Privacy
+
+This app processes Snapchat exports locally and does not include telemetry. See [SECURITY.md](SECURITY.md) and [PRIVACY.md](PRIVACY.md).
+
+Do not commit:
+
+- Snapchat export zips
+- Merged media folders
+- Generated merged ZIP files
+- Google OAuth Desktop client JSON files
+- Google OAuth tokens
+
+## License
+
+This repository is source-available. See [LICENSE](LICENSE).
 
 ## Snapchat Export Notes
 

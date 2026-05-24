@@ -1,0 +1,61 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  qa:
+    name: QA
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --check src/main.js
+      - run: node --check src/preload.js
+      - run: node --check src/renderer.js
+      - run: node --check src/importer-core.js
+      - run: node --check tests/qa-importer.js
+      - run: npm audit --omit=dev
+      - run: npm run qa
+
+  build-mac:
+    name: Build macOS DMG
+    runs-on: macos-latest
+    needs: qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: dist/*.dmg
+
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    needs: qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/*.exe

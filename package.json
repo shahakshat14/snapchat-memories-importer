@@ -1,18 +1,22 @@
 {
-  "name": "snapchat-google-photos-importer",
+  "name": "snapchat-memories-importer",
   "version": "0.1.0",
-  "description": "A macOS app that merges Snapchat export metadata into media files and uploads them to Google Photos.",
+  "description": "A desktop app that merges Snapchat export metadata into media files and exports to ZIP, Apple Photos, or Google Photos.",
   "main": "src/main.js",
   "author": "Akshat Shah",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "scripts": {
     "start": "electron .",
     "qa": "node tests/qa-importer.js",
     "dist": "electron-builder --mac dmg",
-    "pack": "electron-builder --mac dir"
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:win": "electron-builder --win nsis --x64",
+    "pack": "electron-builder --mac dir",
+    "pack:win": "electron-builder --win dir --x64"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "exiftool-vendored": "^35.20.0",
     "extract-zip": "^2.0.1",
     "google-auth-library": "^10.5.0",
@@ -24,7 +28,7 @@
   },
   "build": {
     "appId": "com.akshat.snapchatgooglephotosimporter",
-    "productName": "Snapchat to Google Photos",
+    "productName": "Snapchat Memories Importer",
     "mac": {
       "category": "public.app-category.photography",
       "identity": null,
@@ -33,7 +37,23 @@
       ]
     },
     "dmg": {
-      "artifactName": "Snapchat-to-Google-Photos-${version}.${ext}"
+      "artifactName": "Snapchat-Memories-Importer-${version}.${ext}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Snapchat-Memories-Importer-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
     },
     "files": [
       "src/**/*",
