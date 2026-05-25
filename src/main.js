@@ -23,6 +23,7 @@ const MEDIA_EXTENSIONS = new Set([
 let mainWindow;
 let cancelled = false;
 let preparedImport = null;
+const isElectronRuntime = Boolean(app && ipcMain);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -38,75 +39,77 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer.html'));
 }
 
-app.whenReady().then(createWindow);
-app.on('window-all-closed', async () => {
-  await exiftool.end();
-  if (process.platform !== 'darwin') app.quit();
-});
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
-
-ipcMain.handle('choose-zip', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Choose Snapchat Export Zip',
-    properties: ['openFile'],
-    filters: [{ name: 'Zip archives', extensions: ['zip'] }]
+if (isElectronRuntime) {
+  app.whenReady().then(createWindow);
+  app.on('window-all-closed', async () => {
+    await exiftool.end();
+    if (process.platform !== 'darwin') app.quit();
   });
-  return result.canceled ? null : result.filePaths[0];
-});
-
-ipcMain.handle('choose-credentials', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Choose Google OAuth Desktop Client JSON',
-    properties: ['openFile'],
-    filters: [{ name: 'JSON', extensions: ['json'] }]
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-  return result.canceled ? null : result.filePaths[0];
-});
 
-ipcMain.handle('sign-in', async (_event, credentialsPath) => {
-  const auth = await signInWithGoogle(credentialsPath);
-  return { email: auth.email };
-});
+  ipcMain.handle('choose-zip', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose Snapchat Export Zip(s) or Folder',
+      properties: ['openFile', 'openDirectory', 'multiSelections'],
+      filters: [{ name: 'Zip archives', extensions: ['zip'] }]
+    });
+    return result.canceled ? null : result.filePaths;
+  });
 
-ipcMain.handle('cancel-import', () => {
-  cancelled = true;
-  return true;
-});
+  ipcMain.handle('choose-credentials', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose Google OAuth Desktop Client JSON',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+    return result.canceled ? null : result.filePaths[0];
+  });
 
-ipcMain.handle('open-path', async (_event, targetPath) => {
-  if (!targetPath) return null;
-  const result = await shell.openPath(targetPath);
-  if (result) throw new Error(result);
-  return true;
-});
+  ipcMain.handle('sign-in', async (_event, credentialsPath) => {
+    const auth = await signInWithGoogle(credentialsPath);
+    return { email: auth.email };
+  });
 
-ipcMain.handle('prepare-import', async (_event, options) => {
-  cancelled = false;
-  preparedImport = null;
-  return prepareImportPreview(options);
-});
+  ipcMain.handle('cancel-import', () => {
+    cancelled = true;
+    return true;
+  });
 
-ipcMain.handle('upload-prepared', async () => {
-  cancelled = false;
-  ensurePreparedReady();
-  const accessToken = await getValidAccessToken();
-  if (!accessToken) throw new Error('Sign in with Google before uploading.');
-  return uploadPreparedImport(accessToken);
-});
+  ipcMain.handle('open-path', async (_event, targetPath) => {
+    if (!targetPath) return null;
+    const result = await shell.openPath(targetPath);
+    if (result) throw new Error(result);
+    return true;
+  });
 
-ipcMain.handle('export-prepared-zip', async () => {
-  cancelled = false;
-  ensurePreparedReady();
-  return exportPreparedZip();
-});
+  ipcMain.handle('prepare-import', async (_event, options) => {
+    cancelled = false;
+    preparedImport = null;
+    return prepareImportPreview(options);
+  });
 
-ipcMain.handle('import-apple-photos', async () => {
-  cancelled = false;
-  ensurePreparedReady();
-  return importPreparedIntoApplePhotos();
-});
+  ipcMain.handle('upload-prepared', async () => {
+    cancelled = false;
+    ensurePreparedReady();
+    const accessToken = await getValidAccessToken();
+    if (!accessToken) throw new Error('Sign in with Google before uploading.');
+    return uploadPreparedImport(accessToken);
+  });
+
+  ipcMain.handle('export-prepared-zip', async () => {
+    cancelled = false;
+    ensurePreparedReady();
+    return exportPreparedZip();
+  });
+
+  ipcMain.handle('import-apple-photos', async () => {
+    cancelled = false;
+    ensurePreparedReady();
+    return importPreparedIntoApplePhotos();
+  });
+}
 
 async function prepareImportPreview(options) {
   const startedAt = new Date();
@@ -118,8 +121,12 @@ async function prepareImportPreview(options) {
   await fs.mkdir(mergedDir, { recursive: true });
 
   try {
-    progress('extracting', 4, 'Extracting Snapchat export');
-    await extractZip(options.zipPath, { dir: extractDir });
+    progress('extracting', 4, 'Finding Snapchat export archives');
+    const zipPaths = await resolveSnapchatZipInputs(options.zipPaths || options.zipPath);
+    if (!zipPaths.length) throw new Error('Choose at least one Snapchat My Data zip file, or a folder containing My Data zip files.');
+
+    progress('extracting', 4, `Extracting ${zipPaths.length} Snapchat export archive${zipPaths.length === 1 ? '' : 's'}`);
+    const extractedArchives = await extractSnapchatArchives(zipPaths, extractDir);
     checkCancelled();
 
     progress('scanning', 10, 'Finding media and metadata');
@@ -141,7 +148,10 @@ async function prepareImportPreview(options) {
     const verification = await importer.verifyMergedMedia(merged, 25);
     const preview = {
       startedAt: startedAt.toISOString(),
-      zipPath: options.zipPath,
+      zipPaths,
+      zipPath: zipPaths[0] || null,
+      archiveCount: zipPaths.length,
+      extractedArchives,
       extractedMediaFiles: mediaFiles.length,
       metadataEntries: metadataEntries.length,
       matchedFiles: matched.length,
@@ -162,6 +172,73 @@ async function prepareImportPreview(options) {
   } finally {
     await fs.rm(workspace, { recursive: true, force: true });
   }
+}
+
+async function resolveSnapchatZipInputs(input) {
+  const selected = Array.isArray(input) ? input : input ? [input] : [];
+  const zipPaths = [];
+  const seen = new Set();
+
+  for (const selectedPath of selected) {
+    let stats;
+    try {
+      stats = await fs.stat(selectedPath);
+    } catch {
+      continue;
+    }
+
+    const candidates = stats.isDirectory()
+      ? (await importer.walkFiles(selectedPath)).filter((file) => path.extname(file).toLowerCase() === '.zip')
+      : [selectedPath].filter((file) => path.extname(file).toLowerCase() === '.zip');
+
+    for (const candidate of candidates.sort(compareSnapchatZipNames)) {
+      const resolved = await fs.realpath(candidate).catch(() => path.resolve(candidate));
+      if (seen.has(resolved)) continue;
+      seen.add(resolved);
+      zipPaths.push(resolved);
+    }
+  }
+
+  return zipPaths;
+}
+
+async function extractSnapchatArchives(zipPaths, extractDir) {
+  const extractedArchives = [];
+  for (let index = 0; index < zipPaths.length; index += 1) {
+    checkCancelled();
+    const zipPath = zipPaths[index];
+    const archiveDir = path.join(extractDir, `${String(index + 1).padStart(3, '0')}-${safeArchiveName(zipPath)}`);
+    await fs.mkdir(archiveDir, { recursive: true });
+    progress('extracting', 4 + Math.floor(((index + 1) / Math.max(zipPaths.length, 1)) * 5), `Extracting ${path.basename(zipPath)}`);
+    await extractZip(zipPath, { dir: archiveDir });
+    extractedArchives.push({ zipPath, extractedDir: archiveDir });
+  }
+  return extractedArchives;
+}
+
+function safeArchiveName(zipPath) {
+  return path.basename(zipPath, path.extname(zipPath))
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'snapchat-export';
+}
+
+function compareSnapchatZipNames(left, right) {
+  const leftKey = snapchatZipSortKey(left);
+  const rightKey = snapchatZipSortKey(right);
+  return leftKey.root.localeCompare(rightKey.root, undefined, { numeric: true, sensitivity: 'base' })
+    || leftKey.part - rightKey.part
+    || leftKey.name.localeCompare(rightKey.name, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function snapchatZipSortKey(zipPath) {
+  const name = path.basename(zipPath, path.extname(zipPath));
+  const match = name.match(/^(.*?)(?:[-_](\d+))?$/);
+  return {
+    name,
+    root: match?.[1] || name,
+    part: match?.[2] ? Number(match[2]) : 0
+  };
 }
 
 async function uploadPreparedImport(accessToken) {
@@ -416,3 +493,10 @@ async function createZipFromFolder(sourceDir, zipPath) {
     archive.finalize();
   });
 }
+
+module.exports = {
+  resolveSnapchatZipInputs,
+  extractSnapchatArchives,
+  safeArchiveName,
+  compareSnapchatZipNames
+};

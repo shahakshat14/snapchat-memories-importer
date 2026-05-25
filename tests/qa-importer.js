@@ -8,6 +8,7 @@ const { execFileSync } = require('node:child_process');
 const extractZip = require('extract-zip');
 const { exiftool } = require('exiftool-vendored');
 const importer = require('../src/importer-core');
+const mainProcess = require('../src/main');
 
 const SAMPLE_JPEG_BASE64 =
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAQDxAQDw8QDw8PDw8PDw8QDw8QFREWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OGxAQGi0lHyUtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLf/AABEIAAEAAQMBIgACEQEDEQH/xAAWAAEBAQAAAAAAAAAAAAAAAAAAAQf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAH/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAqf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASP/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASP/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/Al//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EFBQRAQAAAAAAAAAAAAAAAAAAARD/2gAIAQMBAT8QH//EFBQRAQAAAAAAAAAAAAAAAAAAARD/2gAIAQIBAT8QH//EFBABAQAAAAAAAAAAAAAAAAAAARD/2gAIAQEAAT8QH//Z';
@@ -17,11 +18,55 @@ async function main() {
   try {
     await testZipWithEmbeddedMedia(tempRoot);
     await testZipWithDownloadLinks(tempRoot);
+    await testMultipleMyDataZips(tempRoot);
     console.log('QA importer tests passed');
   } finally {
     await exiftool.end();
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+async function testMultipleMyDataZips(tempRoot) {
+  const fixture = path.join(tempRoot, 'multiple-mydata');
+  const sourceOne = path.join(fixture, 'source-one', 'mydata');
+  const sourceTwo = path.join(fixture, 'source-two', 'mydata');
+  const selectedDir = path.join(fixture, 'selected');
+  const extractDir = path.join(fixture, 'extract');
+  const mergedDir = path.join(fixture, 'merged');
+  await fs.mkdir(path.join(sourceOne, 'memories'), { recursive: true });
+  await fs.mkdir(path.join(sourceOne, 'json'), { recursive: true });
+  await fs.mkdir(path.join(sourceTwo, 'memories'), { recursive: true });
+  await fs.mkdir(path.join(sourceTwo, 'json'), { recursive: true });
+  await fs.mkdir(selectedDir, { recursive: true });
+
+  await writeSampleJpeg(path.join(sourceOne, 'memories', 'snap-one.jpg'));
+  await writeSampleJpeg(path.join(sourceTwo, 'memories', 'snap-two.jpg'));
+  await fs.writeFile(path.join(sourceOne, 'index.html'), '<a href="html/memories_history.html">Memories</a>');
+  await fs.writeFile(path.join(sourceTwo, 'index.html'), '<a href="html/memories_history.html">Memories</a>');
+  await fs.writeFile(
+    path.join(sourceOne, 'json', 'memories_history.json'),
+    JSON.stringify([{ Date: '2020-01-02T03:04:05.000Z', 'File Name': 'snap-one.jpg' }])
+  );
+  await fs.writeFile(
+    path.join(sourceTwo, 'json', 'memories_history.json'),
+    JSON.stringify([{ Date: '2022-03-04T05:06:07.000Z', 'File Name': 'snap-two.jpg' }])
+  );
+
+  const firstZip = await zipFixture(path.join(fixture, 'source-one'), path.join(selectedDir, 'mydata.zip'));
+  const secondZip = await zipFixture(path.join(fixture, 'source-two'), path.join(selectedDir, 'mydata-1.zip'));
+  const zipPaths = await mainProcess.resolveSnapchatZipInputs(selectedDir);
+  assert.deepEqual(zipPaths.map((file) => path.basename(file)), [path.basename(firstZip), path.basename(secondZip)], 'folder selection should discover split mydata zips in stable order');
+
+  await mainProcess.extractSnapchatArchives(zipPaths, extractDir);
+  const files = await importer.walkFiles(extractDir);
+  assert.equal(files.filter((file) => path.basename(file) === 'memories_history.json').length, 2, 'duplicate Snapchat metadata paths should be preserved');
+
+  const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+  const verification = await importer.verifyMergedMedia(result.media, 10);
+  assert.equal(result.media.length, 2, 'multiple mydata zips should merge both archives');
+  assert.equal(verification.withDate, 2, 'both split archive dates should be written');
+  await assertExif(path.join(mergedDir, 'snap-one.jpg'), { datePrefix: '2020:01:02 03:04:05' });
+  await assertExif(path.join(mergedDir, 'snap-two.jpg'), { datePrefix: '2022:03:04 05:06:07' });
 }
 
 async function testZipWithEmbeddedMedia(tempRoot) {
@@ -123,8 +168,12 @@ async function assertExif(file, expected) {
   const tags = await exiftool.read(file);
   assert.equal(tags.DateTimeOriginal?.rawValue, expected.datePrefix, `wrong DateTimeOriginal: ${tags.DateTimeOriginal?.rawValue}`);
   assert.ok(tags.DateCreated?.rawValue?.startsWith(expected.datePrefix), `wrong XMP DateCreated: ${tags.DateCreated?.rawValue}`);
-  assert.ok(Math.abs(Number(tags.GPSLatitude) - expected.latitude) < 0.0002, `wrong GPSLatitude: ${tags.GPSLatitude}`);
-  assert.ok(Math.abs(Number(tags.GPSLongitude) - expected.longitude) < 0.0002, `wrong GPSLongitude: ${tags.GPSLongitude}`);
+  if (Number.isFinite(expected.latitude)) {
+    assert.ok(Math.abs(Number(tags.GPSLatitude) - expected.latitude) < 0.0002, `wrong GPSLatitude: ${tags.GPSLatitude}`);
+  }
+  if (Number.isFinite(expected.longitude)) {
+    assert.ok(Math.abs(Number(tags.GPSLongitude) - expected.longitude) < 0.0002, `wrong GPSLongitude: ${tags.GPSLongitude}`);
+  }
 }
 
 async function assertExportedZipContainsExif(zipPath, folderName, fileName, expected) {
