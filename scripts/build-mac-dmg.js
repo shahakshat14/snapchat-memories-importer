@@ -9,10 +9,12 @@ const appDir = path.join(distDir, 'mac-arm64', 'Snapchat Memories Importer.app')
 const dmgPath = path.join(distDir, 'Snapchat-Memories-Importer-0.1.0.dmg');
 const volumeName = 'Snapchat Memories Importer 0.1.0';
 const tempDmg = path.join(os.tmpdir(), `snapchat-memories-${Date.now()}.dmg`);
+const signingIdentity = process.env.MAC_SIGN_IDENTITY || '-';
+const isAdHocSign = signingIdentity === '-';
 
 run('npx', ['electron-builder', '--mac', 'dir', '--publish', 'never'], { cwd: root });
 run('/usr/bin/xattr', ['-cr', appDir]);
-run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--options', 'runtime', appDir]);
+run('/usr/bin/codesign', codeSignArgs(appDir));
 removeFinderInfo(appDir);
 run('/usr/bin/codesign', ['--verify', '--deep', '--verbose=2', appDir]);
 
@@ -42,8 +44,21 @@ run('/usr/bin/hdiutil', ['convert', tempDmg, '-format', 'UDZO', '-o', dmgPath]);
 run('/usr/bin/hdiutil', ['verify', dmgPath]);
 fs.rmSync(tempDmg, { force: true });
 
+if (!isAdHocSign) {
+  run('/usr/bin/codesign', ['--force', '--sign', signingIdentity, '--timestamp', dmgPath]);
+  run('/usr/bin/codesign', ['--verify', '--verbose=2', dmgPath]);
+  notarize(dmgPath);
+}
+
 function run(command, args, options = {}) {
   execFileSync(command, args, { stdio: 'inherit', ...options });
+}
+
+function codeSignArgs(target) {
+  const args = ['--force', '--deep', '--sign', signingIdentity, '--options', 'runtime'];
+  if (!isAdHocSign) args.push('--timestamp');
+  args.push(target);
+  return args;
 }
 
 function removeFinderInfo(target) {
@@ -68,4 +83,24 @@ function attachDmg(target) {
     .find((value) => value.includes(`/Volumes/${volumeName}`));
   if (!line) throw new Error(`Could not find mounted volume in hdiutil output:\n${output}`);
   return line.slice(line.indexOf('/Volumes/')).trim();
+}
+
+function notarize(target) {
+  const args = ['notarytool', 'submit', target, '--wait'];
+  if (process.env.APPLE_NOTARY_PROFILE) {
+    args.push('--keychain-profile', process.env.APPLE_NOTARY_PROFILE);
+  } else {
+    const appleId = process.env.APPLE_ID;
+    const password = process.env.APPLE_APP_SPECIFIC_PASSWORD;
+    const teamId = process.env.APPLE_TEAM_ID;
+    if (!appleId || !password || !teamId) {
+      throw new Error(
+        'Developer ID signing is enabled, but notarization credentials are missing. Set APPLE_NOTARY_PROFILE or APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID.'
+      );
+    }
+    args.push('--apple-id', appleId, '--password', password, '--team-id', teamId);
+  }
+  run('/usr/bin/xcrun', args);
+  run('/usr/bin/xcrun', ['stapler', 'staple', target]);
+  run('/usr/bin/xcrun', ['stapler', 'validate', target]);
 }

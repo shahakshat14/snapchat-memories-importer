@@ -7,7 +7,7 @@ A desktop app that imports a Snapchat data export into Google Photos, Apple Phot
 - [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-0.1.0.dmg)
 - [Download for Windows (.exe)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-Setup-0.1.0.exe)
 
-The macOS build is ad-hoc signed but not Apple-notarized yet. If macOS warns that the developer cannot be verified, right-click the app and choose **Open**, or allow it from Privacy & Security settings.
+The macOS build must be signed with an Apple Developer ID certificate and notarized by Apple to avoid Gatekeeper's malware verification warning. Development builds are ad-hoc signed and may require right-clicking the app and choosing **Open**, or allowing it from Privacy & Security settings.
 
 The app can ask for:
 
@@ -62,7 +62,19 @@ npm run dist:mac
 
 The DMG will be created in `dist/`.
 
-The local DMG is unsigned and not notarized. On first launch, macOS may require right-clicking the app and choosing **Open**, or allowing it in Privacy & Security settings.
+Local DMGs are ad-hoc signed unless you provide Developer ID signing and notarization credentials.
+
+For a Gatekeeper-friendly public release, install a **Developer ID Application** certificate in the build machine keychain and run:
+
+```bash
+MAC_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+APPLE_ID="apple-id@example.com" \
+APPLE_APP_SPECIFIC_PASSWORD="app-specific-password" \
+APPLE_TEAM_ID="TEAMID" \
+npm run dist:mac
+```
+
+You can also set `APPLE_NOTARY_PROFILE` instead of the Apple ID, app-specific password, and team ID values if you already stored notarytool credentials in the keychain.
 
 ## Build Windows EXE
 
