@@ -19,12 +19,57 @@ async function main() {
     await testZipWithEmbeddedMedia(tempRoot);
     await testZipWithDownloadLinks(tempRoot);
     await testFailedMediaDownloadIsSkipped(tempRoot);
+    await testSnapchatMemoryDateFallback(tempRoot);
     await testMultipleMyDataZips(tempRoot);
     console.log('QA importer tests passed');
   } finally {
     await exiftool.end();
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+async function testSnapchatMemoryDateFallback(tempRoot) {
+  const fixture = path.join(tempRoot, 'snapchat-memory-date-fallback');
+  const source = path.join(fixture, 'source');
+  const extractDir = path.join(fixture, 'extract');
+  const mergedDir = path.join(fixture, 'merged');
+  await fs.mkdir(path.join(source, 'memories'), { recursive: true });
+  await fs.mkdir(path.join(source, 'json'), { recursive: true });
+
+  await writeSampleJpeg(path.join(source, 'memories', '2025-05-24_F052114D-7BD5-45F1-B64A-180F3A40806D-main.jpg'));
+  await writeSampleJpeg(path.join(source, 'memories', '2025-05-24_F052114D-7BD5-45F1-B64A-180F3A40806D-overlay.png'));
+  await fs.writeFile(
+    path.join(source, 'json', 'memories_history.json'),
+    JSON.stringify({
+      'Saved Media': [
+        {
+          Date: '2025-05-24 02:56:57 UTC',
+          'Media Type': 'Image',
+          Location: 'Latitude, Longitude: 43.72698, -79.45044',
+          'Download Link': '',
+          'Media Download Url': ''
+        }
+      ]
+    })
+  );
+
+  const zipPath = await zipFixture(source, path.join(fixture, 'snapchat-date-fallback.zip'));
+  await fs.mkdir(extractDir, { recursive: true });
+  await extractZip(zipPath, { dir: extractDir });
+  const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+  const verification = await importer.verifyMergedMedia(result.media, 10);
+
+  assert.equal(result.metadataEntries.length, 1, 'Saved Media wrapper should flatten into individual records');
+  assert.equal(result.media.length, 1, 'date fallback should merge the primary Snapchat memory file');
+  assert.equal(result.media[0].matchedBy, 'snapchat-date-media-order');
+  assert.equal(path.basename(result.media[0].mergedPath), '2025-05-24_F052114D-7BD5-45F1-B64A-180F3A40806D-main.jpg');
+  assert.equal(verification.withDate, 1, 'date fallback should write the metadata date');
+  assert.equal(verification.withGps, 1, 'date fallback should parse the Snapchat Location string');
+  await assertExif(result.media[0].mergedPath, {
+    datePrefix: '2025:05:24 02:56:57',
+    latitude: 43.72698,
+    longitude: -79.45044
+  });
 }
 
 async function testMultipleMyDataZips(tempRoot) {
@@ -57,6 +102,8 @@ async function testMultipleMyDataZips(tempRoot) {
   const secondZip = await zipFixture(path.join(fixture, 'source-two'), path.join(selectedDir, 'mydata-1.zip'));
   const zipPaths = await mainProcess.resolveSnapchatZipInputs(selectedDir);
   assert.deepEqual(zipPaths.map((file) => path.basename(file)), [path.basename(firstZip), path.basename(secondZip)], 'folder selection should discover split mydata zips in stable order');
+  const multiSelectZipPaths = await mainProcess.resolveSnapchatZipInputs([secondZip, firstZip]);
+  assert.deepEqual(multiSelectZipPaths.map((file) => path.basename(file)), [path.basename(firstZip), path.basename(secondZip)], 'multi-select mydata zips should be sorted before extraction');
 
   await mainProcess.extractSnapchatArchives(zipPaths, extractDir);
   const files = await importer.walkFiles(extractDir);

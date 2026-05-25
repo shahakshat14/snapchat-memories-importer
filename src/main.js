@@ -157,6 +157,7 @@ async function prepareImportPreview(options) {
       matchedFiles: matched.length,
       downloadedFromMetadataLinks: merged.filter((item) => item.source === 'download-link').length,
       skippedDownloadLinks: merged.skippedDownloads || [],
+      exifWriteWarnings: merged.exifWriteWarnings || [],
       unmatchedEmbeddedMediaFiles: matches.filter((match) => !match.metadata).length,
       mergedDir,
       previewReportPath,
@@ -200,7 +201,7 @@ async function resolveSnapchatZipInputs(input) {
     }
   }
 
-  return zipPaths;
+  return zipPaths.sort(compareSnapchatZipNames);
 }
 
 async function extractSnapchatArchives(zipPaths, extractDir) {
