@@ -38,7 +38,11 @@ run('/usr/bin/hdiutil', [
 ]);
 const mountPoint = attachDmg(tempDmg);
 try {
-  run('/usr/bin/ditto', [appDir, path.join(mountPoint, 'Snapchat Memories Importer.app')]);
+  const mountedAppDir = path.join(mountPoint, 'Snapchat Memories Importer.app');
+  run('/usr/bin/ditto', [appDir, mountedAppDir]);
+  run('/usr/bin/xattr', ['-cr', mountedAppDir]);
+  removeFinderInfo(mountedAppDir);
+  run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', mountedAppDir]);
 } finally {
   run('/usr/bin/hdiutil', ['detach', mountPoint]);
 }
