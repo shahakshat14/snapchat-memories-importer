@@ -27,7 +27,8 @@ async function prepareMergedMedia({ extractedDir, mergedDir, onProgress = () => 
     mediaFiles,
     metadataEntries,
     directMatches,
-    media
+    media,
+    skippedDownloads: media.skippedDownloads || []
   };
 }
 
@@ -78,6 +79,7 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
   await fs.mkdir(mergedDir, { recursive: true });
   const usedMetadata = new Set();
   const materialized = [];
+  const skippedDownloads = [];
   const matchedDirect = directMatches.filter((match) => match.metadata);
 
   for (const match of matchedDirect) {
@@ -94,13 +96,22 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
     const downloadUrl = findDownloadUrl(entry);
     const filename = filenameForMetadata(entry, downloadUrl);
     const destination = await uniqueDestination(path.join(mergedDir, filename));
-    const downloadedPath = await downloadMedia(downloadUrl, destination);
-    const match = metadataMatchFromEntry(downloadedPath, entry, 'download-link');
-    await writeExif(downloadedPath, match);
-    materialized.push({ ...match, source: 'download-link', mergedPath: downloadedPath });
-    onProgress(materialized.length, matchedDirect.length + downloadable.length);
+    try {
+      const downloadedPath = await downloadMedia(downloadUrl, destination);
+      const match = metadataMatchFromEntry(downloadedPath, entry, 'download-link');
+      await writeExif(downloadedPath, match);
+      materialized.push({ ...match, source: 'download-link', mergedPath: downloadedPath });
+    } catch (error) {
+      skippedDownloads.push({
+        url: downloadUrl,
+        reason: error?.message || String(error),
+        sourceFile: entry._sourceFile || null
+      });
+    }
+    onProgress(materialized.length + skippedDownloads.length, matchedDirect.length + downloadable.length);
   }
 
+  materialized.skippedDownloads = skippedDownloads;
   return materialized;
 }
 
@@ -195,6 +206,9 @@ async function downloadMedia(url, destination) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Could not download Snapchat media: ${response.status} ${url}`);
   const contentType = response.headers.get('content-type');
+  if (contentType && !/^image\//i.test(contentType) && !/^video\//i.test(contentType) && !/octet-stream/i.test(contentType)) {
+    throw new Error(`Download URL did not return media content: ${contentType} ${url}`);
+  }
   let output = destination;
   if (!MEDIA_EXTENSIONS.has(path.extname(output).toLowerCase())) {
     const extension = mime.extension(contentType || '') || 'jpg';
@@ -208,9 +222,31 @@ function findDownloadUrl(entry) {
   for (const [key, value] of walkScalars(entry)) {
     if (typeof value !== 'string') continue;
     if (!/(download|url|link)/i.test(key)) continue;
-    if (/^https?:\/\//i.test(value.trim())) return value.trim();
+    const url = value.trim();
+    if (/^https?:\/\//i.test(url) && isLikelyMediaDownloadUrl(url, key)) return url;
   }
   return null;
+}
+
+function isLikelyMediaDownloadUrl(value, key = '') {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const pathname = decodeURIComponent(parsed.pathname).toLowerCase();
+  const search = parsed.search.toLowerCase();
+  if (hostname === 'help.snapchat.com' || hostname === 'support.snapchat.com') return false;
+  if (/\/hc\/(requests|articles)\//i.test(pathname)) return false;
+  if (/(^|[?&])utm_medium=missing(&|$)/i.test(search)) return false;
+
+  const extension = path.extname(pathname);
+  if (MEDIA_EXTENSIONS.has(extension)) return true;
+  if (/download/i.test(key) && !/(help|support|request|missing|faq|contact)/i.test(`${hostname}${pathname}${search}`)) return true;
+  return false;
 }
 
 function filenameForMetadata(entry, downloadUrl) {
@@ -414,5 +450,6 @@ module.exports = {
   writeExif,
   findDatetime,
   findDownloadUrl,
+  isLikelyMediaDownloadUrl,
   walkFiles
 };

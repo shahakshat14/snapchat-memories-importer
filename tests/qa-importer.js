@@ -18,6 +18,7 @@ async function main() {
   try {
     await testZipWithEmbeddedMedia(tempRoot);
     await testZipWithDownloadLinks(tempRoot);
+    await testFailedMediaDownloadIsSkipped(tempRoot);
     await testMultipleMyDataZips(tempRoot);
     console.log('QA importer tests passed');
   } finally {
@@ -136,6 +137,10 @@ async function testZipWithDownloadLinks(tempRoot) {
           'Download Link': `${server.url}/snap-remote.jpg`,
           Latitude: '37.7749',
           Longitude: '-122.4194'
+        },
+        {
+          Date: '2021-06-08T08:09:10.000Z',
+          'Download Link': 'https://help.snapchat.com/hc/requests/new?utm_source=dmd&utm_medium=missing&utm_campaign=faq'
         }
       ])
     );
@@ -148,6 +153,8 @@ async function testZipWithDownloadLinks(tempRoot) {
 
     assert.equal(result.mediaFiles.length, 0, 'link-only zip should not need embedded media');
     assert.equal(result.media.length, 1, 'link-only zip should download and merge one media file');
+    assert.equal(result.skippedDownloads.length, 0, 'Snapchat help request links should not be treated as downloads');
+    assert.equal(importer.findDownloadUrl({ 'Download Link': 'https://help.snapchat.com/hc/requests/new?utm_source=dmd&utm_medium=missing&utm_campaign=faq' }), null);
     assert.equal(result.media[0].source, 'download-link');
     assert.equal(verification.total, 1, 'preview verification should see downloaded file');
     assert.equal(verification.withDate, 1, 'preview verification should see downloaded date');
@@ -160,6 +167,37 @@ async function testZipWithDownloadLinks(tempRoot) {
     });
   } finally {
     await server.close();
+  }
+}
+
+async function testFailedMediaDownloadIsSkipped(tempRoot) {
+  const fixture = path.join(tempRoot, 'failed-download-link');
+  const source = path.join(fixture, 'source');
+  const extractDir = path.join(fixture, 'extract');
+  const mergedDir = path.join(fixture, 'merged');
+  await fs.mkdir(path.join(source, 'json'), { recursive: true });
+  const server = http.createServer((_request, response) => {
+    response.writeHead(403, { 'Content-Type': 'text/html' });
+    response.end('forbidden');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  try {
+    await fs.writeFile(
+      path.join(source, 'json', 'memories_history.json'),
+      JSON.stringify([{ Date: '2023-01-01T00:00:00.000Z', 'Download Link': `http://127.0.0.1:${server.address().port}/expired.jpg` }])
+    );
+
+    const zipPath = await zipFixture(source, path.join(fixture, 'snapchat-expired-link.zip'));
+    await fs.mkdir(extractDir, { recursive: true });
+    await extractZip(zipPath, { dir: extractDir });
+    const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+
+    assert.equal(result.media.length, 0, 'expired download links should not create merged media');
+    assert.equal(result.skippedDownloads.length, 1, 'expired download links should be reported without aborting preview');
+    assert.match(result.skippedDownloads[0].reason, /403/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 }
 
