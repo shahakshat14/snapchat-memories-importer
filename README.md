@@ -2,6 +2,13 @@
 
 A desktop app that imports a Snapchat data export into Google Photos, Apple Photos, or a portable merged EXIF zip.
 
+## Direct Downloads
+
+- [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-0.1.0.dmg)
+- [Download for Windows (.exe)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-Setup-0.1.0.exe)
+
+The macOS build is ad-hoc signed but not Apple-notarized yet. If macOS warns that the developer cannot be verified, right-click the app and choose **Open**, or allow it from Privacy & Security settings.
+
 The app can ask for:
 
 1. A Snapchat export `.zip`
