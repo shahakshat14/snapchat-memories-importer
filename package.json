@@ -12,6 +12,8 @@
     "dist": "node scripts/build-mac-dmg.js",
     "dist:mac": "node scripts/build-mac-dmg.js",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "install:mac": "bash scripts/install-local-mac.sh",
+    "update:mac": "npm run dist:mac && npm run install:mac",
     "pack": "electron-builder --mac dir --publish never",
     "pack:win": "electron-builder --win dir --x64 --publish never"
   },
