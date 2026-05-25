@@ -61,6 +61,8 @@
     },
     "afterPack": "scripts/after-pack.js",
     "asarUnpack": [
+      "node_modules/exiftool-vendored.pl/**/*",
+      "node_modules/exiftool-vendored.exe/**/*",
       "node_modules/ffmpeg-static/**/*"
     ],
     "files": [
