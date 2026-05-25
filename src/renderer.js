@@ -32,6 +32,7 @@ const elements = {
   gpsMetric: document.querySelector('#gpsMetric'),
   missingMetric: document.querySelector('#missingMetric'),
   skippedMetric: document.querySelector('#skippedMetric'),
+  warningMetric: document.querySelector('#warningMetric'),
   sampleRows: document.querySelector('#sampleRows')
 };
 
@@ -173,6 +174,7 @@ function renderPreview(preview) {
   elements.gpsMetric.textContent = verification.withGps;
   elements.missingMetric.textContent = verification.missingFiles;
   elements.skippedMetric.textContent = preview.skippedDownloadLinks?.length || 0;
+  elements.warningMetric.textContent = (preview.exifWriteWarnings?.length || 0) + (verification.warnings?.length || 0);
   elements.sampleRows.innerHTML = '';
 
   for (const item of verification.sample) {

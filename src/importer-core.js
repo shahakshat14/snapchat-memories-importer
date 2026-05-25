@@ -37,7 +37,9 @@ async function verifyMergedMedia(media, sampleSize = 25) {
   let withDate = 0;
   let withGps = 0;
   let missingFiles = 0;
+  let unreadableFiles = 0;
   const sourceCounts = {};
+  const warnings = [];
 
   for (const item of media) {
     sourceCounts[item.source] = (sourceCounts[item.source] || 0) + 1;
@@ -46,7 +48,18 @@ async function verifyMergedMedia(media, sampleSize = 25) {
       continue;
     }
 
-    const tags = await exiftool.read(item.mergedPath);
+    let tags;
+    try {
+      tags = await exiftool.read(item.mergedPath);
+    } catch (error) {
+      unreadableFiles += 1;
+      warnings.push({
+        fileName: path.basename(item.mergedPath),
+        path: item.mergedPath,
+        reason: error?.message || String(error)
+      });
+      continue;
+    }
     const hasDate = Boolean(tags.DateTimeOriginal?.rawValue || tags.DateCreated?.rawValue);
     const hasGps = Number.isFinite(Number(tags.GPSLatitude)) && Number.isFinite(Number(tags.GPSLongitude));
     if (hasDate) withDate += 1;
@@ -70,7 +83,9 @@ async function verifyMergedMedia(media, sampleSize = 25) {
     withDate,
     withGps,
     missingFiles,
+    unreadableFiles,
     sourceCounts,
+    warnings,
     sample
   };
 }
@@ -80,14 +95,16 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
   const usedMetadata = new Set();
   const materialized = [];
   const skippedDownloads = [];
+  const exifWriteWarnings = [];
   const matchedDirect = directMatches.filter((match) => match.metadata);
 
   for (const match of matchedDirect) {
     usedMetadata.add(match.metadata);
     const destination = await uniqueDestination(path.join(mergedDir, path.basename(match.file)));
     await fs.copyFile(match.file, destination);
-    await writeExif(destination, match);
-    materialized.push({ ...match, source: 'zip-media', mergedPath: destination });
+    const exifWarning = await tryWriteExif(destination, match);
+    if (exifWarning) exifWriteWarnings.push(exifWarning);
+    materialized.push({ ...match, source: 'zip-media', mergedPath: destination, exifWarning });
     onProgress(materialized.length, matchedDirect.length);
   }
 
@@ -99,8 +116,9 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
     try {
       const downloadedPath = await downloadMedia(downloadUrl, destination);
       const match = metadataMatchFromEntry(downloadedPath, entry, 'download-link');
-      await writeExif(downloadedPath, match);
-      materialized.push({ ...match, source: 'download-link', mergedPath: downloadedPath });
+      const exifWarning = await tryWriteExif(downloadedPath, match);
+      if (exifWarning) exifWriteWarnings.push(exifWarning);
+      materialized.push({ ...match, source: 'download-link', mergedPath: downloadedPath, exifWarning });
     } catch (error) {
       skippedDownloads.push({
         url: downloadUrl,
@@ -112,6 +130,7 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
   }
 
   materialized.skippedDownloads = skippedDownloads;
+  materialized.exifWriteWarnings = exifWriteWarnings;
   return materialized;
 }
 
@@ -163,7 +182,39 @@ async function buildMatches(mediaFiles, metadataEntries) {
     const metadata = byHash.get(sha) || byName.get(name) || byStem.get(stem) || null;
     matches.push(metadataMatchFromEntry(file, metadata, byHash.has(sha) ? 'sha256' : byName.has(name) ? 'filename' : byStem.has(stem) ? 'stem' : 'none'));
   }
+  matchSnapchatMemoriesByDate(matches, metadataEntries);
   return matches;
+}
+
+function matchSnapchatMemoriesByDate(matches, metadataEntries) {
+  const metadataByDateAndType = new Map();
+  const matchedMetadata = new Set(matches.filter((match) => match.metadata).map((match) => match.metadata));
+
+  for (const entry of metadataEntries) {
+    if (matchedMetadata.has(entry)) continue;
+    const takenAt = findDatetime(entry);
+    const mediaType = normalizedMediaType(entry);
+    if (!takenAt || !mediaType) continue;
+    const key = `${dateKey(takenAt)}|${mediaType}`;
+    if (!metadataByDateAndType.has(key)) metadataByDateAndType.set(key, []);
+    metadataByDateAndType.get(key).push(entry);
+  }
+
+  for (const entries of metadataByDateAndType.values()) {
+    entries.sort((left, right) => findDatetime(left) - findDatetime(right));
+  }
+
+  const snapchatMemoryMatches = matches
+    .filter((match) => !match.metadata && isPrimarySnapchatMemoryFile(match.file))
+    .sort((left, right) => path.basename(left.file).localeCompare(path.basename(right.file)));
+
+  for (const match of snapchatMemoryMatches) {
+    const key = `${snapchatDateFromFilename(match.file)}|${mediaTypeFromExtension(match.file)}`;
+    const candidates = metadataByDateAndType.get(key);
+    if (!candidates?.length) continue;
+    const metadata = candidates.shift();
+    Object.assign(match, metadataMatchFromEntry(match.file, metadata, 'snapchat-date-media-order'));
+  }
 }
 
 function metadataMatchFromEntry(file, metadata, matchedBy) {
@@ -191,6 +242,19 @@ async function writeExif(file, match) {
     tags.GPSLongitude = match.longitude;
   }
   if (Object.keys(tags).length) await exiftool.write(file, tags, ['-overwrite_original']);
+}
+
+async function tryWriteExif(file, match) {
+  try {
+    await writeExif(file, match);
+    return null;
+  } catch (error) {
+    return {
+      fileName: path.basename(file),
+      path: file,
+      reason: error?.message || String(error)
+    };
+  }
 }
 
 function formatExifDate(date) {
@@ -240,6 +304,7 @@ function isLikelyMediaDownloadUrl(value, key = '') {
   const pathname = decodeURIComponent(parsed.pathname).toLowerCase();
   const search = parsed.search.toLowerCase();
   if (hostname === 'help.snapchat.com' || hostname === 'support.snapchat.com') return false;
+  if ((hostname === 'snap.com' || hostname.endsWith('.snap.com')) && /\/privacy\//i.test(pathname)) return false;
   if (/\/hc\/(requests|articles)\//i.test(pathname)) return false;
   if (/(^|[?&])utm_medium=missing(&|$)/i.test(search)) return false;
 
@@ -288,8 +353,10 @@ function flattenJsonRecords(payload) {
 }
 
 function looksLikeRecord(value) {
-  const keys = Object.keys(value).join(' ').toLowerCase();
-  return [...DATE_KEYS, ...FILE_KEYS, ...LAT_KEYS, ...LON_KEYS].some((key) => keys.includes(key));
+  const scalarKeys = Object.entries(value)
+    .filter(([, nested]) => nested === null || ['string', 'number', 'boolean'].includes(typeof nested))
+    .map(([key]) => key.toLowerCase());
+  return scalarKeys.some((key) => [...DATE_KEYS, ...FILE_KEYS, ...LAT_KEYS, ...LON_KEYS].some((hint) => key.includes(hint)));
 }
 
 function candidateFileTokens(entry) {
@@ -353,7 +420,54 @@ function findFloat(entry, hints) {
     const parsed = Number.parseFloat(String(value).trim());
     if (Number.isFinite(parsed)) return parsed;
   }
+  const location = findLocationPair(entry);
+  if (!location) return null;
+  return hints.some((hint) => hint === 'latitude' || hint === 'lat') ? location.latitude : location.longitude;
+}
+
+function findLocationPair(entry) {
+  for (const [key, value] of walkScalars(entry)) {
+    if (!/location|coordinate|gps/i.test(key) || typeof value !== 'string') continue;
+    const match = value.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (!match) continue;
+    const latitude = Number.parseFloat(match[1]);
+    const longitude = Number.parseFloat(match[2]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) return { latitude, longitude };
+  }
   return null;
+}
+
+function isPrimarySnapchatMemoryFile(file) {
+  const parent = path.basename(path.dirname(file)).toLowerCase();
+  return parent === 'memories' && /_\w[\w-]*-main\.[^.]+$/i.test(path.basename(file));
+}
+
+function snapchatDateFromFilename(file) {
+  return path.basename(file).match(/^(\d{4}-\d{2}-\d{2})_/)?.[1] || null;
+}
+
+function mediaTypeFromExtension(file) {
+  const extension = path.extname(file).toLowerCase();
+  if (['.mp4', '.mov', '.m4v', '.3gp', '.3g2'].includes(extension)) return 'video';
+  if (MEDIA_EXTENSIONS.has(extension)) return 'image';
+  return null;
+}
+
+function normalizedMediaType(entry) {
+  for (const [key, value] of walkScalars(entry)) {
+    if (!/media.*type|type/i.test(key) || typeof value !== 'string') continue;
+    if (/video/i.test(value)) return 'video';
+    if (/image|photo|picture/i.test(value)) return 'image';
+  }
+  return null;
+}
+
+function dateKey(date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0')
+  ].join('-');
 }
 
 function walkScalars(value, prefix = '') {
