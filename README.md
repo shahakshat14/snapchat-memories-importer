@@ -11,11 +11,11 @@ The macOS DMG is universal for Intel and Apple Silicon Macs. It requires macOS 1
 
 The app can ask for:
 
-1. A Snapchat export `.zip`
+1. One or more Snapchat export `.zip` files, or a folder containing Snapchat export `.zip` files
 2. A Google OAuth Desktop client JSON, only if uploading to Google Photos
 3. Google Photos login, only if uploading to Google Photos
 
-Then it extracts the export, finds photos/videos and metadata, writes available EXIF/XMP date and GPS data into copied media files, and shows a preview for confirmation before any export/import/upload action.
+Then it extracts each export into an isolated folder, finds photos/videos and metadata across all archives, writes available EXIF/XMP date and GPS data into copied media files, and shows a preview for confirmation before any export/import/upload action.
 
 After reviewing the preview, you can:
 
@@ -52,7 +52,7 @@ Run the importer QA fixtures:
 npm run qa
 ```
 
-The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, verifies the preview summary, exports a merged zip, re-extracts it, and reads the output back with ExifTool. It covers both media embedded in the zip and metadata-only exports with download links.
+The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, verifies the preview summary, exports a merged zip, re-extracts it, and reads the output back with ExifTool. It covers media embedded in the zip, metadata-only exports with download links, and multiple `mydata` zip files with duplicate internal paths.
 
 ## Build DMG
 
@@ -121,7 +121,8 @@ This repository is source-available. See [LICENSE](LICENSE).
 
 Snapchat documents that `My Data` downloads arrive as a zip file. For Memories-only exports, Snapchat says to extract the zip, open `index.html`, choose **Memories**, and download individual Memories or all Memories from that page.
 
-Because of that, the importer supports both export shapes:
+Because of that, the importer supports these export shapes:
 
 - Media files already embedded inside the zip, with JSON/CSV metadata matched by filename, stem, or SHA-256.
 - Metadata or HTML files that include download links for the actual Memories media.
+- Multiple `mydata` zip files selected together, or a folder containing `mydata*.zip` files. Each archive is extracted into its own isolated folder so duplicate paths like `index.html`, `html/memories_history.html`, and `json/memories_history.json` do not overwrite each other.

@@ -1,5 +1,5 @@
 const state = {
-  zipPath: null,
+  zipPaths: [],
   credentialsPath: null,
   signedIn: false,
   running: false,
@@ -35,13 +35,13 @@ const elements = {
 };
 
 elements.zipButton.addEventListener('click', async () => {
-  const zipPath = await window.snapImporter.chooseZip();
-  if (!zipPath) return;
-  state.zipPath = zipPath;
+  const zipPaths = await window.snapImporter.chooseZip();
+  if (!zipPaths?.length) return;
+  state.zipPaths = zipPaths;
   state.preview = null;
-  elements.zipPath.textContent = zipPath;
+  elements.zipPath.textContent = formatSelectedExports(zipPaths);
   hidePreview();
-  setMessage('Snapchat zip selected. Prepare a preview before uploading.');
+  setMessage(`${zipPaths.length} Snapchat export source${zipPaths.length === 1 ? '' : 's'} selected. Prepare a preview before uploading.`);
   updateButtons();
 });
 
@@ -74,7 +74,7 @@ elements.signInButton.addEventListener('click', async () => {
 elements.prepareButton.addEventListener('click', async () => {
   try {
     setBusy(true, 'Preparing preview');
-    state.preview = await window.snapImporter.prepareImport({ zipPath: state.zipPath });
+    state.preview = await window.snapImporter.prepareImport({ zipPaths: state.zipPaths });
     renderPreview(state.preview);
     setProgress({
       stage: 'preview-ready',
@@ -224,7 +224,7 @@ function setError(error) {
 function updateButtons() {
   const reviewedReady = state.preview?.readyToUpload && elements.reviewCheckbox.checked;
   elements.signInButton.disabled = state.running || !state.credentialsPath;
-  elements.prepareButton.disabled = state.running || !state.zipPath;
+  elements.prepareButton.disabled = state.running || !state.zipPaths.length;
   elements.zipExportButton.disabled = state.running || !reviewedReady;
   elements.applePhotosButton.disabled = state.running || !reviewedReady || window.snapImporter.platform !== 'darwin';
   elements.uploadButton.disabled = state.running || !reviewedReady || !state.signedIn;
@@ -232,6 +232,11 @@ function updateButtons() {
   elements.zipButton.disabled = state.running;
   elements.credentialsButton.disabled = state.running;
   elements.openMergedButton.disabled = state.running || !state.preview?.mergedDir;
+}
+
+function formatSelectedExports(paths) {
+  if (paths.length === 1) return paths[0];
+  return `${paths.length} selected: ${paths.map((item) => item.split(/[\\/]/).pop()).join(', ')}`;
 }
 
 function titleCase(value) {
