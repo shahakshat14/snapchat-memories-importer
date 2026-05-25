@@ -20,12 +20,49 @@ async function main() {
     await testZipWithDownloadLinks(tempRoot);
     await testFailedMediaDownloadIsSkipped(tempRoot);
     await testSnapchatMemoryDateFallback(tempRoot);
+    await testDamagedVideoRepairIsReported(tempRoot);
     await testMultipleMyDataZips(tempRoot);
     console.log('QA importer tests passed');
   } finally {
     await exiftool.end();
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+async function testDamagedVideoRepairIsReported(tempRoot) {
+  const fixture = path.join(tempRoot, 'damaged-video');
+  const source = path.join(fixture, 'source');
+  const extractDir = path.join(fixture, 'extract');
+  const mergedDir = path.join(fixture, 'merged');
+  await fs.mkdir(path.join(source, 'memories'), { recursive: true });
+  await fs.mkdir(path.join(source, 'json'), { recursive: true });
+
+  await fs.writeFile(path.join(source, 'memories', '2025-01-02_DAMAGED-main.mp4'), Buffer.from('not a valid mp4'));
+  await fs.writeFile(
+    path.join(source, 'json', 'memories_history.json'),
+    JSON.stringify({
+      'Saved Media': [
+        {
+          Date: '2025-01-02 03:04:05 UTC',
+          'Media Type': 'Video',
+          Location: 'Latitude, Longitude: 43.1, -79.2',
+          'Download Link': '',
+          'Media Download Url': ''
+        }
+      ]
+    })
+  );
+
+  const zipPath = await zipFixture(source, path.join(fixture, 'snapchat-damaged-video.zip'));
+  await fs.mkdir(extractDir, { recursive: true });
+  await extractZip(zipPath, { dir: extractDir });
+  const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+
+  assert.equal(result.media.length, 1, 'damaged videos should still be copied into the preview output');
+  assert.equal(result.media.exifWriteWarnings.length, 1, 'damaged videos should report EXIF repair/write warnings without aborting preview');
+  assert.equal(result.media.mediaRepairResults.length, 1, 'damaged videos should run through the automatic repair path');
+  assert.equal(result.media.mediaRepairResults[0].repaired, false, 'unrepairable fake video should be marked as not repaired');
+  assert.match(result.media.exifWriteWarnings[0].repairStatus, /repair-failed|ffmpeg-unavailable/);
 }
 
 async function testSnapchatMemoryDateFallback(tempRoot) {
