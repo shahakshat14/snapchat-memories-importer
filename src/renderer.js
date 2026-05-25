@@ -31,6 +31,7 @@ const elements = {
   dateMetric: document.querySelector('#dateMetric'),
   gpsMetric: document.querySelector('#gpsMetric'),
   missingMetric: document.querySelector('#missingMetric'),
+  skippedMetric: document.querySelector('#skippedMetric'),
   sampleRows: document.querySelector('#sampleRows')
 };
 
@@ -171,6 +172,7 @@ function renderPreview(preview) {
   elements.dateMetric.textContent = verification.withDate;
   elements.gpsMetric.textContent = verification.withGps;
   elements.missingMetric.textContent = verification.missingFiles;
+  elements.skippedMetric.textContent = preview.skippedDownloadLinks?.length || 0;
   elements.sampleRows.innerHTML = '';
 
   for (const item of verification.sample) {

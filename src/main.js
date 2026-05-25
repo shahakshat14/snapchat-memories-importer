@@ -156,6 +156,7 @@ async function prepareImportPreview(options) {
       metadataEntries: metadataEntries.length,
       matchedFiles: matched.length,
       downloadedFromMetadataLinks: merged.filter((item) => item.source === 'download-link').length,
+      skippedDownloadLinks: merged.skippedDownloads || [],
       unmatchedEmbeddedMediaFiles: matches.filter((match) => !match.metadata).length,
       mergedDir,
       previewReportPath,
