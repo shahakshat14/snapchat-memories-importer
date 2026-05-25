@@ -122,6 +122,7 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
       mediaRepairResults.push(exifResult.repair);
       emitMaterializeProgress(onProgress, materialized.length, totalWork, `${exifResult.repair.repaired ? 'Repaired' : 'Repair failed for'} ${path.basename(destination)}`, destination, exifResult.repair.repaired ? 'repaired' : 'repair-failed');
     }
+    await setFilesystemDates(destination, match.takenAt);
     materialized.push({ ...match, source: 'zip-media', mergedPath: destination, exifWarning: exifResult.warning || null, repair: exifResult.repair || null });
     emitMaterializeProgress(onProgress, materialized.length, totalWork, `Merged ${path.basename(destination)} (${index + 1} of ${matchedDirect.length})`, destination, 'merged');
   }
@@ -140,6 +141,7 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
       const exifResult = await tryWriteExif(downloadedPath, match);
       if (exifResult.warning) exifWriteWarnings.push(exifResult.warning);
       if (exifResult.repair) mediaRepairResults.push(exifResult.repair);
+      await setFilesystemDates(downloadedPath, match.takenAt);
       materialized.push({ ...match, source: 'download-link', mergedPath: downloadedPath, exifWarning: exifResult.warning || null, repair: exifResult.repair || null });
     } catch (error) {
       skippedDownloads.push({
@@ -165,6 +167,25 @@ function emitMaterializeProgress(onProgress, complete, total, message, subject, 
     subject,
     fileName: subject && typeof subject === 'string' ? path.basename(subject) : null
   });
+}
+
+async function setFilesystemDates(file, date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return;
+  await fs.utimes(file, date, date).catch(() => {});
+  if (process.platform !== 'darwin' || !fss.existsSync('/usr/bin/SetFile')) return;
+  await execFileAsync('/usr/bin/SetFile', ['-d', formatSetFileDate(date), '-m', formatSetFileDate(date), file], {
+    timeout: 5000,
+    maxBuffer: 1024 * 64
+  }).catch(() => {});
+}
+
+function formatSetFileDate(date) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return [
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    date.getFullYear()
+  ].join('/') + ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 async function loadMetadataEntries(files) {
