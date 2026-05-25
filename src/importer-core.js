@@ -2,10 +2,15 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const fss = require('node:fs');
 const crypto = require('node:crypto');
+const { execFile } = require('node:child_process');
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
+const { promisify } = require('node:util');
 const { exiftool } = require('exiftool-vendored');
+const ffmpegStaticPath = require('ffmpeg-static');
 const mime = require('mime-types');
+
+const execFileAsync = promisify(execFile);
 
 const MEDIA_EXTENSIONS = new Set([
   '.3g2', '.3gp', '.avif', '.bmp', '.gif', '.heic', '.jpeg', '.jpg', '.m4v',
@@ -28,7 +33,8 @@ async function prepareMergedMedia({ extractedDir, mergedDir, onProgress = () => 
     metadataEntries,
     directMatches,
     media,
-    skippedDownloads: media.skippedDownloads || []
+    skippedDownloads: media.skippedDownloads || [],
+    mediaRepairResults: media.mediaRepairResults || []
   };
 }
 
@@ -96,15 +102,17 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
   const materialized = [];
   const skippedDownloads = [];
   const exifWriteWarnings = [];
+  const mediaRepairResults = [];
   const matchedDirect = directMatches.filter((match) => match.metadata);
 
   for (const match of matchedDirect) {
     usedMetadata.add(match.metadata);
     const destination = await uniqueDestination(path.join(mergedDir, path.basename(match.file)));
     await fs.copyFile(match.file, destination);
-    const exifWarning = await tryWriteExif(destination, match);
-    if (exifWarning) exifWriteWarnings.push(exifWarning);
-    materialized.push({ ...match, source: 'zip-media', mergedPath: destination, exifWarning });
+    const exifResult = await tryWriteExif(destination, match);
+    if (exifResult.warning) exifWriteWarnings.push(exifResult.warning);
+    if (exifResult.repair) mediaRepairResults.push(exifResult.repair);
+    materialized.push({ ...match, source: 'zip-media', mergedPath: destination, exifWarning: exifResult.warning || null, repair: exifResult.repair || null });
     onProgress(materialized.length, matchedDirect.length);
   }
 
@@ -116,9 +124,10 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
     try {
       const downloadedPath = await downloadMedia(downloadUrl, destination);
       const match = metadataMatchFromEntry(downloadedPath, entry, 'download-link');
-      const exifWarning = await tryWriteExif(downloadedPath, match);
-      if (exifWarning) exifWriteWarnings.push(exifWarning);
-      materialized.push({ ...match, source: 'download-link', mergedPath: downloadedPath, exifWarning });
+      const exifResult = await tryWriteExif(downloadedPath, match);
+      if (exifResult.warning) exifWriteWarnings.push(exifResult.warning);
+      if (exifResult.repair) mediaRepairResults.push(exifResult.repair);
+      materialized.push({ ...match, source: 'download-link', mergedPath: downloadedPath, exifWarning: exifResult.warning || null, repair: exifResult.repair || null });
     } catch (error) {
       skippedDownloads.push({
         url: downloadUrl,
@@ -131,6 +140,7 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
 
   materialized.skippedDownloads = skippedDownloads;
   materialized.exifWriteWarnings = exifWriteWarnings;
+  materialized.mediaRepairResults = mediaRepairResults;
   return materialized;
 }
 
@@ -247,14 +257,111 @@ async function writeExif(file, match) {
 async function tryWriteExif(file, match) {
   try {
     await writeExif(file, match);
-    return null;
+    return {};
+  } catch (error) {
+    const firstError = error?.message || String(error);
+    const repair = await repairMediaForExif(file, firstError);
+    if (repair.repaired) {
+      try {
+        await writeExif(file, match);
+        return { repair };
+      } catch (retryError) {
+        return {
+          repair,
+          warning: {
+            fileName: path.basename(file),
+            path: file,
+            reason: retryError?.message || String(retryError),
+            repairStatus: 'repaired-but-exif-retry-failed',
+            originalReason: firstError
+          }
+        };
+      }
+    }
+
+    return {
+      repair,
+      warning: {
+        fileName: path.basename(file),
+        path: file,
+        reason: firstError,
+        repairStatus: repair.status,
+        repairReason: repair.reason || null
+      }
+    };
+  }
+}
+
+async function repairMediaForExif(file, originalReason = '') {
+  if (!isVideoFile(file)) {
+    return {
+      fileName: path.basename(file),
+      path: file,
+      repaired: false,
+      status: 'unsupported-media-type',
+      reason: originalReason
+    };
+  }
+
+  const ffmpegPath = resolveFfmpegPath();
+  if (!ffmpegPath) {
+    return {
+      fileName: path.basename(file),
+      path: file,
+      repaired: false,
+      status: 'ffmpeg-unavailable',
+      reason: 'Bundled ffmpeg binary is not available.'
+    };
+  }
+
+  const parsed = path.parse(file);
+  const repairedPath = path.join(parsed.dir, `${parsed.name}.repair-${crypto.randomUUID()}${parsed.ext}`);
+  try {
+    await execFileAsync(ffmpegPath, [
+      '-y',
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-err_detect', 'ignore_err',
+      '-i', file,
+      '-map', '0',
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      repairedPath
+    ], { maxBuffer: 1024 * 1024 * 8 });
+
+    const stats = await fs.stat(repairedPath);
+    if (!stats.size) throw new Error('ffmpeg produced an empty repaired file.');
+    await fs.copyFile(repairedPath, file);
+    return {
+      fileName: path.basename(file),
+      path: file,
+      repaired: true,
+      status: 'remuxed-video-container',
+      reason: originalReason
+    };
   } catch (error) {
     return {
       fileName: path.basename(file),
       path: file,
-      reason: error?.message || String(error)
+      repaired: false,
+      status: 'repair-failed',
+      reason: error?.stderr || error?.message || String(error),
+      originalReason
     };
+  } finally {
+    await fs.rm(repairedPath, { force: true }).catch(() => {});
   }
+}
+
+function resolveFfmpegPath() {
+  if (!ffmpegStaticPath) return null;
+  const unpackedPath = ffmpegStaticPath.replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
+  if (fss.existsSync(unpackedPath)) return unpackedPath;
+  return fss.existsSync(ffmpegStaticPath) ? ffmpegStaticPath : null;
+}
+
+function isVideoFile(file) {
+  return ['.3g2', '.3gp', '.m4v', '.mov', '.mp4'].includes(path.extname(file).toLowerCase());
 }
 
 function formatExifDate(date) {

@@ -21,6 +21,7 @@
     "archiver": "^7.0.1",
     "exiftool-vendored": "^35.20.0",
     "extract-zip": "^2.0.1",
+    "ffmpeg-static": "^5.3.0",
     "google-auth-library": "^10.5.0",
     "mime-types": "^3.0.1"
   },
@@ -34,6 +35,7 @@
     "mac": {
       "category": "public.app-category.photography",
       "identity": null,
+      "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg",
       "target": [
         "dmg"
       ]
@@ -58,6 +60,9 @@
       "deleteAppDataOnUninstall": false
     },
     "afterPack": "scripts/after-pack.js",
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*"
+    ],
     "files": [
       "src/**/*",
       "node_modules/**/*",

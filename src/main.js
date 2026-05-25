@@ -158,6 +158,7 @@ async function prepareImportPreview(options) {
       downloadedFromMetadataLinks: merged.filter((item) => item.source === 'download-link').length,
       skippedDownloadLinks: merged.skippedDownloads || [],
       exifWriteWarnings: merged.exifWriteWarnings || [],
+      mediaRepairResults: merged.mediaRepairResults || [],
       unmatchedEmbeddedMediaFiles: matches.filter((match) => !match.metadata).length,
       mergedDir,
       previewReportPath,
