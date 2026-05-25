@@ -5,14 +5,16 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const distDir = path.join(root, 'dist');
-const appDir = path.join(distDir, 'mac-arm64', 'Snapchat Memories Importer.app');
+const appDir = path.join(distDir, 'mac-universal', 'Snapchat Memories Importer.app');
+const appExecutable = path.join(appDir, 'Contents', 'MacOS', 'Snapchat Memories Importer');
 const dmgPath = path.join(distDir, 'Snapchat-Memories-Importer-0.1.0.dmg');
 const volumeName = 'Snapchat Memories Importer 0.1.0';
 const tempDmg = path.join(os.tmpdir(), `snapchat-memories-${Date.now()}.dmg`);
 const signingIdentity = process.env.MAC_SIGN_IDENTITY || '-';
 const isAdHocSign = signingIdentity === '-';
 
-run('npx', ['electron-builder', '--mac', 'dir', '--publish', 'never'], { cwd: root });
+run('npx', ['electron-builder', '--mac', 'dir', '--universal', '--publish', 'never'], { cwd: root });
+verifyUniversalBinary(appExecutable);
 run('/usr/bin/xattr', ['-cr', appDir]);
 run('/usr/bin/codesign', codeSignArgs(appDir));
 removeFinderInfo(appDir);
@@ -83,6 +85,19 @@ function attachDmg(target) {
     .find((value) => value.includes(`/Volumes/${volumeName}`));
   if (!line) throw new Error(`Could not find mounted volume in hdiutil output:\n${output}`);
   return line.slice(line.indexOf('/Volumes/')).trim();
+}
+
+function verifyUniversalBinary(target) {
+  const archs = execFileSync('/usr/bin/lipo', ['-archs', target], { encoding: 'utf8' })
+    .trim()
+    .split(/\s+/)
+    .sort();
+  const requiredArchs = ['arm64', 'x86_64'];
+  const missingArchs = requiredArchs.filter((arch) => !archs.includes(arch));
+  if (missingArchs.length > 0) {
+    throw new Error(`macOS app is not universal. Missing architecture(s): ${missingArchs.join(', ')}`);
+  }
+  console.log(`Verified universal macOS binary architectures: ${archs.join(', ')}`);
 }
 
 function notarize(target) {

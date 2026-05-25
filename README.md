@@ -7,7 +7,7 @@ A desktop app that imports a Snapchat data export into Google Photos, Apple Phot
 - [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-0.1.0.dmg)
 - [Download for Windows (.exe)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-Setup-0.1.0.exe)
 
-The macOS build must be signed with an Apple Developer ID certificate and notarized by Apple to avoid Gatekeeper's malware verification warning. Development builds are ad-hoc signed and may require right-clicking the app and choosing **Open**, or allowing it from Privacy & Security settings.
+The macOS DMG is universal for Intel and Apple Silicon Macs. It requires macOS 12 Monterey or newer because Electron 39 relies on Chromium versions that no longer support Big Sur or older macOS releases. The macOS build must be signed with an Apple Developer ID certificate and notarized by Apple to avoid Gatekeeper's malware verification warning. Development builds are ad-hoc signed and may require right-clicking the app and choosing **Open**, or allowing it from Privacy & Security settings.
 
 The app can ask for:
 
