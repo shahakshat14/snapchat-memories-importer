@@ -15,6 +15,7 @@ const elements = {
   zipExportButton: document.querySelector('#zipExportButton'),
   applePhotosButton: document.querySelector('#applePhotosButton'),
   cancelButton: document.querySelector('#cancelButton'),
+  clearLogButton: document.querySelector('#clearLogButton'),
   openMergedButton: document.querySelector('#openMergedButton'),
   reviewCheckbox: document.querySelector('#reviewCheckbox'),
   zipPath: document.querySelector('#zipPath'),
@@ -27,6 +28,7 @@ const elements = {
   message: document.querySelector('#message'),
   previewPanel: document.querySelector('#previewPanel'),
   previewLocation: document.querySelector('#previewLocation'),
+  activityLog: document.querySelector('#activityLog'),
   totalMetric: document.querySelector('#totalMetric'),
   dateMetric: document.querySelector('#dateMetric'),
   gpsMetric: document.querySelector('#gpsMetric'),
@@ -76,6 +78,8 @@ elements.signInButton.addEventListener('click', async () => {
 
 elements.prepareButton.addEventListener('click', async () => {
   try {
+    clearActivityLog();
+    appendLogLine('Preparing preview run');
     setBusy(true, 'Preparing preview');
     state.preview = await window.snapImporter.prepareImport({ zipPaths: state.zipPaths });
     renderPreview(state.preview);
@@ -157,9 +161,15 @@ elements.reviewCheckbox.addEventListener('change', () => updateButtons());
 elements.cancelButton.addEventListener('click', async () => {
   await window.snapImporter.cancelImport();
   setMessage('Cancelling after the current file finishes.');
+  appendLogLine('Cancel requested. Waiting for the current file operation to finish.', 'cancel');
 });
 
-window.snapImporter.onProgress((payload) => setProgress(payload));
+elements.clearLogButton.addEventListener('click', clearActivityLog);
+
+window.snapImporter.onProgress((payload) => {
+  setProgress(payload);
+  appendProgressLog(payload);
+});
 if (window.snapImporter.platform !== 'darwin') {
   elements.applePhotosButton.title = 'Apple Photos import is only available on macOS.';
 }
@@ -211,6 +221,31 @@ function setProgress({ stage, percent, message }) {
   elements.message.textContent = message || '';
   elements.statusPill.textContent = titleCase(stage || 'Working');
   elements.statusPill.className = `status-pill ${stage || ''}`;
+}
+
+function appendProgressLog(payload) {
+  const detail = payload.detail || {};
+  const complete = Number.isFinite(detail.complete) && Number.isFinite(detail.total)
+    ? ` ${detail.complete}/${detail.total}`
+    : '';
+  const action = detail.action ? ` ${detail.action}` : '';
+  appendLogLine(`${titleCase(payload.stage || 'working')}${action}${complete}: ${payload.message || ''}`, payload.stage);
+}
+
+function appendLogLine(message, stage = 'info') {
+  const line = document.createElement('div');
+  line.className = `terminal-line ${stage || 'info'}`;
+  const time = new Date().toLocaleTimeString([], { hour12: false });
+  line.textContent = `[${time}] ${message}`;
+  elements.activityLog.append(line);
+  while (elements.activityLog.children.length > 600) {
+    elements.activityLog.firstElementChild?.remove();
+  }
+  elements.activityLog.scrollTop = elements.activityLog.scrollHeight;
+}
+
+function clearActivityLog() {
+  elements.activityLog.innerHTML = '';
 }
 
 function setBusy(running, message) {

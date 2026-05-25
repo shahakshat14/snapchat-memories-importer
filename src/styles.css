@@ -150,6 +150,48 @@ h1 {
   background: #fff;
 }
 
+.activity {
+  margin: 0 0 24px;
+  padding: 16px;
+  border: 1px solid #ded8ce;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.terminal {
+  height: 190px;
+  overflow: auto;
+  border: 1px solid #222;
+  border-radius: 8px;
+  background: #111;
+  color: #e9f5df;
+  padding: 12px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.terminal-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.terminal-line.error,
+.terminal-line.warning {
+  color: #ffd18a;
+}
+
+.terminal-line.preview-ready,
+.terminal-line.complete {
+  color: #a8f0c6;
+}
+
 .preview-head {
   display: flex;
   align-items: flex-start;
@@ -312,6 +354,7 @@ th {
 
   .title-row,
   .preview-head,
+  .activity-head,
   .actions {
     flex-direction: column;
   }
