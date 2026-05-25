@@ -104,26 +104,39 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
   const exifWriteWarnings = [];
   const mediaRepairResults = [];
   const matchedDirect = directMatches.filter((match) => match.metadata);
+  let totalWork = matchedDirect.length;
 
-  for (const match of matchedDirect) {
+  for (let index = 0; index < matchedDirect.length; index += 1) {
+    const match = matchedDirect[index];
     usedMetadata.add(match.metadata);
     const destination = await uniqueDestination(path.join(mergedDir, path.basename(match.file)));
+    emitMaterializeProgress(onProgress, materialized.length, totalWork, `Copying ${path.basename(match.file)}`, match.file, 'copying');
     await fs.copyFile(match.file, destination);
+    emitMaterializeProgress(onProgress, materialized.length, totalWork, `Writing metadata to ${path.basename(destination)}`, destination, 'writing-exif');
     const exifResult = await tryWriteExif(destination, match);
-    if (exifResult.warning) exifWriteWarnings.push(exifResult.warning);
-    if (exifResult.repair) mediaRepairResults.push(exifResult.repair);
+    if (exifResult.warning) {
+      exifWriteWarnings.push(exifResult.warning);
+      emitMaterializeProgress(onProgress, materialized.length, totalWork, `Could not write metadata to ${path.basename(destination)}`, destination, 'warning');
+    }
+    if (exifResult.repair) {
+      mediaRepairResults.push(exifResult.repair);
+      emitMaterializeProgress(onProgress, materialized.length, totalWork, `${exifResult.repair.repaired ? 'Repaired' : 'Repair failed for'} ${path.basename(destination)}`, destination, exifResult.repair.repaired ? 'repaired' : 'repair-failed');
+    }
     materialized.push({ ...match, source: 'zip-media', mergedPath: destination, exifWarning: exifResult.warning || null, repair: exifResult.repair || null });
-    onProgress(materialized.length, matchedDirect.length);
+    emitMaterializeProgress(onProgress, materialized.length, totalWork, `Merged ${path.basename(destination)} (${index + 1} of ${matchedDirect.length})`, destination, 'merged');
   }
 
   const downloadable = metadataEntries.filter((entry) => !usedMetadata.has(entry) && findDownloadUrl(entry));
+  totalWork = matchedDirect.length + downloadable.length;
   for (const entry of downloadable) {
     const downloadUrl = findDownloadUrl(entry);
     const filename = filenameForMetadata(entry, downloadUrl);
     const destination = await uniqueDestination(path.join(mergedDir, filename));
     try {
+      emitMaterializeProgress(onProgress, materialized.length + skippedDownloads.length, totalWork, `Downloading ${filename}`, downloadUrl, 'downloading');
       const downloadedPath = await downloadMedia(downloadUrl, destination);
       const match = metadataMatchFromEntry(downloadedPath, entry, 'download-link');
+      emitMaterializeProgress(onProgress, materialized.length + skippedDownloads.length, totalWork, `Writing metadata to ${path.basename(downloadedPath)}`, downloadedPath, 'writing-exif');
       const exifResult = await tryWriteExif(downloadedPath, match);
       if (exifResult.warning) exifWriteWarnings.push(exifResult.warning);
       if (exifResult.repair) mediaRepairResults.push(exifResult.repair);
@@ -134,14 +147,24 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
         reason: error?.message || String(error),
         sourceFile: entry._sourceFile || null
       });
+      emitMaterializeProgress(onProgress, materialized.length + skippedDownloads.length, totalWork, `Skipped failed download ${filename}`, downloadUrl, 'skipped-download');
     }
-    onProgress(materialized.length + skippedDownloads.length, matchedDirect.length + downloadable.length);
+    emitMaterializeProgress(onProgress, materialized.length + skippedDownloads.length, totalWork, `Prepared ${materialized.length + skippedDownloads.length} of ${totalWork}`, filename, 'merged');
   }
 
   materialized.skippedDownloads = skippedDownloads;
   materialized.exifWriteWarnings = exifWriteWarnings;
   materialized.mediaRepairResults = mediaRepairResults;
   return materialized;
+}
+
+function emitMaterializeProgress(onProgress, complete, total, message, subject, action) {
+  onProgress(complete, total, {
+    action,
+    message,
+    subject,
+    fileName: subject && typeof subject === 'string' ? path.basename(subject) : null
+  });
 }
 
 async function loadMetadataEntries(files) {
@@ -327,7 +350,7 @@ async function repairMediaForExif(file, originalReason = '') {
       '-c', 'copy',
       '-movflags', '+faststart',
       repairedPath
-    ], { maxBuffer: 1024 * 1024 * 8 });
+    ], { maxBuffer: 1024 * 1024 * 8, timeout: 30_000 });
 
     const stats = await fs.stat(repairedPath);
     if (!stats.size) throw new Error('ffmpeg produced an empty repaired file.');

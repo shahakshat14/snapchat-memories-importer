@@ -139,9 +139,14 @@ async function prepareImportPreview(options) {
     checkCancelled();
 
     progress('merging', 18, `Preparing ${matched.length + downloadable.length} Snapchat memories`);
-    const merged = await importer.materializeMedia(matches, metadataEntries, mergedDir, (complete, total) => {
+    const merged = await importer.materializeMedia(matches, metadataEntries, mergedDir, (complete, total, detail = {}) => {
       checkCancelled();
-      progress('merging', 18 + Math.floor((complete / Math.max(total, 1)) * 42), `Merged ${complete} of ${total}`);
+      const percent = 18 + Math.floor((complete / Math.max(total, 1)) * 42);
+      progress('merging', percent, detail.message || `Merged ${complete} of ${total}`, {
+        ...detail,
+        complete,
+        total
+      });
     });
 
     progress('verifying', 72, 'Verifying merged EXIF/XMP metadata');
@@ -444,8 +449,14 @@ async function getValidAccessToken() {
   return credentials.access_token;
 }
 
-function progress(stage, percent, message) {
-  mainWindow?.webContents.send('progress', { stage, percent, message });
+function progress(stage, percent, message, detail = {}) {
+  mainWindow?.webContents.send('progress', {
+    stage,
+    percent,
+    message,
+    detail,
+    at: new Date().toISOString()
+  });
 }
 
 function ensurePreparedReady() {
