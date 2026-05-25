@@ -61,8 +61,8 @@ function run(command, args, options = {}) {
 }
 
 function codeSignArgs(target) {
-  const args = ['--force', '--deep', '--sign', signingIdentity, '--options', 'runtime'];
-  if (!isAdHocSign) args.push('--timestamp');
+  const args = ['--force', '--deep', '--sign', signingIdentity];
+  if (!isAdHocSign) args.push('--options', 'runtime', '--timestamp');
   args.push(target);
   return args;
 }
