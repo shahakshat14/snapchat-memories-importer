@@ -1,0 +1,71 @@
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const root = path.resolve(__dirname, '..');
+const distDir = path.join(root, 'dist');
+const appDir = path.join(distDir, 'mac-arm64', 'Snapchat Memories Importer.app');
+const dmgPath = path.join(distDir, 'Snapchat-Memories-Importer-0.1.0.dmg');
+const volumeName = 'Snapchat Memories Importer 0.1.0';
+const tempDmg = path.join(os.tmpdir(), `snapchat-memories-${Date.now()}.dmg`);
+
+run('npx', ['electron-builder', '--mac', 'dir', '--publish', 'never'], { cwd: root });
+run('/usr/bin/xattr', ['-cr', appDir]);
+run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--options', 'runtime', appDir]);
+removeFinderInfo(appDir);
+run('/usr/bin/codesign', ['--verify', '--deep', '--verbose=2', appDir]);
+
+fs.rmSync(dmgPath, { force: true });
+run('/usr/bin/hdiutil', [
+  'create',
+  '-size',
+  `${imageSizeMegabytes(appDir)}m`,
+  '-fs',
+  'HFS+',
+  '-volname',
+  volumeName,
+  '-layout',
+  'NONE',
+  '-ov',
+  '-type',
+  'UDIF',
+  tempDmg,
+]);
+const mountPoint = attachDmg(tempDmg);
+try {
+  run('/usr/bin/ditto', [appDir, path.join(mountPoint, 'Snapchat Memories Importer.app')]);
+} finally {
+  run('/usr/bin/hdiutil', ['detach', mountPoint]);
+}
+run('/usr/bin/hdiutil', ['convert', tempDmg, '-format', 'UDZO', '-o', dmgPath]);
+run('/usr/bin/hdiutil', ['verify', dmgPath]);
+fs.rmSync(tempDmg, { force: true });
+
+function run(command, args, options = {}) {
+  execFileSync(command, args, { stdio: 'inherit', ...options });
+}
+
+function removeFinderInfo(target) {
+  const files = execFileSync('/usr/bin/find', [target, '-xattrname', 'com.apple.FinderInfo', '-print'], { encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean);
+  for (const file of files) {
+    execFileSync('/usr/bin/xattr', ['-d', 'com.apple.FinderInfo', file], { stdio: 'ignore' });
+  }
+}
+
+function imageSizeMegabytes(target) {
+  const output = execFileSync('/usr/bin/du', ['-sm', target], { encoding: 'utf8' });
+  const size = Number.parseInt(output.split(/\s+/)[0], 10);
+  return Math.max(300, size + 150);
+}
+
+function attachDmg(target) {
+  const output = execFileSync('/usr/bin/hdiutil', ['attach', '-nobrowse', target], { encoding: 'utf8' });
+  const line = output
+    .split('\n')
+    .find((value) => value.includes(`/Volumes/${volumeName}`));
+  if (!line) throw new Error(`Could not find mounted volume in hdiutil output:\n${output}`);
+  return line.slice(line.indexOf('/Volumes/')).trim();
+}
