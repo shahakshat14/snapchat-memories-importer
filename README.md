@@ -15,7 +15,7 @@ The app can ask for:
 2. A Google OAuth Desktop client JSON, only if uploading to Google Photos
 3. Google Photos login, only if uploading to Google Photos
 
-Then it extracts each export into an isolated folder, finds photos/videos and metadata across all archives, writes available EXIF/XMP date and GPS data into copied media files, gives the merged media clean chronological filenames, and shows a preview for confirmation before any export/import/upload action.
+Then it extracts each export into an isolated folder, finds photos/videos and metadata across all archives, writes available EXIF/XMP date and GPS data into copied media files, gives the merged media clean chronological filenames, and shows a preview with timeline and issue audits before any export/import/upload action.
 
 After reviewing the preview, you can:
 
@@ -109,6 +109,12 @@ YYYY-MM-DD_HH-mm-ss_snapchat-memory-2.jpg
 ```
 
 The suffix is added only when multiple Memories share the same timestamp.
+
+Each preview folder also includes:
+
+- `Import Summary.html`, a human-readable audit with date range, year counts, duplicate timestamps, and files needing review.
+- `_Needs Review/review-report.json`, when damaged files, missing dates, skipped downloads, or unreadable outputs are detected.
+- `_Needs Review/Damaged Videos/` and `_Needs Review/Missing Dates/`, when media needs a closer look.
 
 ## Security and Privacy
 

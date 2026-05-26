@@ -36,6 +36,16 @@ const elements = {
   skippedMetric: document.querySelector('#skippedMetric'),
   repairMetric: document.querySelector('#repairMetric'),
   warningMetric: document.querySelector('#warningMetric'),
+  issueMetric: document.querySelector('#issueMetric'),
+  oldestDate: document.querySelector('#oldestDate'),
+  newestDate: document.querySelector('#newestDate'),
+  duplicateMetric: document.querySelector('#duplicateMetric'),
+  dateCoverageMetric: document.querySelector('#dateCoverageMetric'),
+  gpsCoverageMetric: document.querySelector('#gpsCoverageMetric'),
+  topMatchMetric: document.querySelector('#topMatchMetric'),
+  timelineBars: document.querySelector('#timelineBars'),
+  reviewList: document.querySelector('#reviewList'),
+  reviewItems: document.querySelector('#reviewItems'),
   sampleRows: document.querySelector('#sampleRows')
 };
 
@@ -177,6 +187,8 @@ updateButtons();
 
 function renderPreview(preview) {
   const verification = preview.verification;
+  const timeline = preview.timelineAudit || verification.timeline || {};
+  const reviewIssues = verification.issueFiles || [];
   elements.previewPanel.hidden = false;
   elements.reviewCheckbox.checked = false;
   elements.previewLocation.textContent = preview.mergedDir;
@@ -187,6 +199,15 @@ function renderPreview(preview) {
   elements.skippedMetric.textContent = preview.skippedDownloadLinks?.length || 0;
   elements.repairMetric.textContent = (preview.mediaRepairResults || []).filter((item) => item.repaired).length;
   elements.warningMetric.textContent = (preview.exifWriteWarnings?.length || 0) + (verification.warnings?.length || 0);
+  elements.issueMetric.textContent = reviewIssues.length;
+  elements.oldestDate.textContent = formatDate(timeline.oldest);
+  elements.newestDate.textContent = formatDate(timeline.newest);
+  elements.duplicateMetric.textContent = timeline.duplicateTimestamps?.length || 0;
+  elements.dateCoverageMetric.textContent = percent(verification.withDate, verification.total);
+  elements.gpsCoverageMetric.textContent = percent(verification.withGps, verification.total);
+  elements.topMatchMetric.textContent = topMatchLabel(verification.matchCounts);
+  renderTimelineBars(timeline.byYear || {});
+  renderReviewIssues(reviewIssues);
   elements.sampleRows.innerHTML = '';
 
   for (const item of verification.sample) {
@@ -205,12 +226,67 @@ function hidePreview() {
   elements.previewPanel.hidden = true;
   elements.reviewCheckbox.checked = false;
   elements.sampleRows.innerHTML = '';
+  elements.timelineBars.innerHTML = '';
+  elements.reviewItems.innerHTML = '';
+  elements.reviewList.hidden = true;
 }
 
 function cell(value) {
   const element = document.createElement('td');
   element.textContent = value;
   return element;
+}
+
+function renderTimelineBars(byYear) {
+  elements.timelineBars.innerHTML = '';
+  const entries = Object.entries(byYear).sort(([left], [right]) => left.localeCompare(right));
+  const max = Math.max(...entries.map(([, count]) => count), 1);
+  for (const [year, count] of entries) {
+    const row = document.createElement('div');
+    row.className = 'timeline-row';
+    const label = document.createElement('span');
+    label.textContent = year;
+    const track = document.createElement('div');
+    track.className = 'timeline-track';
+    const bar = document.createElement('div');
+    bar.style.width = `${Math.max(4, Math.round((count / max) * 100))}%`;
+    track.append(bar);
+    const value = document.createElement('strong');
+    value.textContent = count;
+    row.append(label, track, value);
+    elements.timelineBars.append(row);
+  }
+}
+
+function renderReviewIssues(issues) {
+  elements.reviewItems.innerHTML = '';
+  elements.reviewList.hidden = !issues.length;
+  for (const item of issues.slice(0, 8)) {
+    const li = document.createElement('li');
+    li.textContent = `${titleCase(item.type || 'issue')}: ${item.fileName || 'Unknown file'}`;
+    elements.reviewItems.append(li);
+  }
+  if (issues.length > 8) {
+    const li = document.createElement('li');
+    li.textContent = `${issues.length - 8} more in _Needs Review`;
+    elements.reviewItems.append(li);
+  }
+}
+
+function percent(value, total) {
+  if (!total) return '0%';
+  return `${Math.round((value / total) * 100)}%`;
+}
+
+function formatDate(value) {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function topMatchLabel(matchCounts = {}) {
+  const [name, count] = Object.entries(matchCounts).sort((left, right) => right[1] - left[1])[0] || [];
+  return name ? `${titleCase(name)} (${count})` : 'Unknown';
 }
 
 function setProgress({ stage, percent, message }) {
