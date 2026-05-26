@@ -61,23 +61,26 @@ elements.zipButton.addEventListener('click', async () => {
 });
 
 elements.credentialsButton.addEventListener('click', async () => {
-  const credentialsPath = await window.snapImporter.chooseCredentials();
-  if (!credentialsPath) return;
-  state.credentialsPath = credentialsPath;
-  state.signedIn = false;
-  elements.credentialsPath.textContent = credentialsPath;
-  elements.accountLabel.textContent = 'Not connected';
-  setMessage('Google OAuth JSON selected.');
-  updateButtons();
+  try {
+    const credentialsPath = await window.snapImporter.chooseCredentials();
+    if (!credentialsPath) return;
+    state.credentialsPath = credentialsPath;
+    state.signedIn = false;
+    elements.credentialsPath.textContent = credentialsPath;
+    elements.accountLabel.textContent = 'Not connected';
+    updateButtons();
+    await connectGoogle();
+  } catch (error) {
+    setError(error);
+  } finally {
+    setBusy(false);
+    updateButtons();
+  }
 });
 
 elements.signInButton.addEventListener('click', async () => {
   try {
-    setBusy(true, 'Opening Google login');
-    const account = await window.snapImporter.signIn(state.credentialsPath);
-    state.signedIn = true;
-    elements.accountLabel.textContent = account.email;
-    setProgress({ stage: 'connected', percent: 0, message: 'Google Photos connected. Upload is available after preview approval.' });
+    await connectGoogle();
   } catch (error) {
     setError(error);
   } finally {
@@ -108,6 +111,7 @@ elements.prepareButton.addEventListener('click', async () => {
 
 elements.uploadButton.addEventListener('click', async () => {
   try {
+    if (!state.signedIn) await connectGoogle();
     setBusy(true, 'Uploading reviewed files');
     const report = await window.snapImporter.uploadPrepared();
     setProgress({
@@ -122,6 +126,18 @@ elements.uploadButton.addEventListener('click', async () => {
     updateButtons();
   }
 });
+
+async function connectGoogle() {
+  if (!state.credentialsPath) {
+    throw new Error('Choose the Google OAuth JSON first.');
+  }
+  setBusy(true, 'Opening Google login');
+  appendLogLine('Opening Google login in your browser', 'connected');
+  const account = await window.snapImporter.signIn(state.credentialsPath);
+  state.signedIn = true;
+  elements.accountLabel.textContent = account.email;
+  setProgress({ stage: 'connected', percent: 0, message: 'Google Photos connected. Upload is available after preview approval.' });
+}
 
 elements.zipExportButton.addEventListener('click', async () => {
   try {
@@ -344,7 +360,7 @@ function updateButtons() {
   elements.prepareButton.disabled = state.running || !state.zipPaths.length;
   elements.zipExportButton.disabled = state.running || !reviewedReady;
   elements.applePhotosButton.disabled = state.running || !reviewedReady || window.snapImporter.platform !== 'darwin';
-  elements.uploadButton.disabled = state.running || !reviewedReady || !state.signedIn;
+  elements.uploadButton.disabled = state.running || !reviewedReady || (!state.signedIn && !state.credentialsPath);
   elements.cancelButton.disabled = !state.running;
   elements.zipButton.disabled = state.running;
   elements.credentialsButton.disabled = state.running;
