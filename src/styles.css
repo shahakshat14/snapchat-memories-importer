@@ -239,6 +239,96 @@ h2 {
   margin-top: 2px;
 }
 
+.audit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.audit-card {
+  border: 1px solid #e2dbd0;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfaf7;
+}
+
+.audit-card h3,
+.review-list h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.audit-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.audit-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.audit-card dt {
+  color: #766b60;
+}
+
+.audit-card dd {
+  margin: 0;
+  font-weight: 800;
+  text-align: right;
+}
+
+.timeline-bars {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.timeline-row {
+  display: grid;
+  grid-template-columns: 54px 1fr 54px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.timeline-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eee8df;
+}
+
+.timeline-track div {
+  height: 100%;
+  border-radius: inherit;
+  background: #34a853;
+}
+
+.timeline-row strong {
+  text-align: right;
+}
+
+.review-list {
+  margin: 0 0 16px;
+  border: 1px solid #f0c36b;
+  border-radius: 8px;
+  background: #fff8e5;
+  padding: 14px;
+}
+
+.review-list ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.review-list li + li {
+  margin-top: 5px;
+}
+
 .sample-table-wrap {
   max-height: 220px;
   overflow: auto;
@@ -357,6 +447,10 @@ th {
   .activity-head,
   .actions {
     flex-direction: column;
+  }
+
+  .audit-grid {
+    grid-template-columns: 1fr;
   }
 
   .metrics {

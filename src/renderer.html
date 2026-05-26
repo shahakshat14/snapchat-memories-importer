@@ -78,6 +78,30 @@
             <div><strong id="skippedMetric">0</strong><small>Skipped Links</small></div>
             <div><strong id="repairMetric">0</strong><small>Repaired</small></div>
             <div><strong id="warningMetric">0</strong><small>Warnings</small></div>
+            <div><strong id="issueMetric">0</strong><small>Needs Review</small></div>
+          </div>
+          <div class="audit-grid">
+            <section class="audit-card">
+              <h3>Timeline</h3>
+              <dl>
+                <div><dt>Oldest</dt><dd id="oldestDate">Unknown</dd></div>
+                <div><dt>Newest</dt><dd id="newestDate">Unknown</dd></div>
+                <div><dt>Duplicate timestamps</dt><dd id="duplicateMetric">0</dd></div>
+              </dl>
+            </section>
+            <section class="audit-card">
+              <h3>Coverage</h3>
+              <dl>
+                <div><dt>Date coverage</dt><dd id="dateCoverageMetric">0%</dd></div>
+                <div><dt>GPS coverage</dt><dd id="gpsCoverageMetric">0%</dd></div>
+                <div><dt>Top match</dt><dd id="topMatchMetric">Unknown</dd></div>
+              </dl>
+            </section>
+          </div>
+          <div class="timeline-bars" id="timelineBars"></div>
+          <div class="review-list" id="reviewList" hidden>
+            <h3>Needs Review</h3>
+            <ul id="reviewItems"></ul>
           </div>
           <div class="sample-table-wrap">
             <table>

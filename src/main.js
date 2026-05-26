@@ -151,6 +151,15 @@ async function prepareImportPreview(options) {
 
     progress('verifying', 72, 'Verifying merged EXIF/XMP metadata');
     const verification = await importer.verifyMergedMedia(merged, 25);
+    progress('verifying', 86, 'Building timeline audit and review folders');
+    const reviewArtifacts = await importer.createReviewArtifacts({
+      mergedDir,
+      media: merged,
+      verification,
+      skippedDownloadLinks: merged.skippedDownloads || [],
+      exifWriteWarnings: merged.exifWriteWarnings || [],
+      mediaRepairResults: merged.mediaRepairResults || []
+    });
     const preview = {
       startedAt: startedAt.toISOString(),
       zipPaths,
@@ -168,6 +177,8 @@ async function prepareImportPreview(options) {
       mergedDir,
       previewReportPath,
       verification,
+      timelineAudit: verification.timeline,
+      reviewArtifacts,
       readyToUpload: verification.total > 0 && verification.missingFiles === 0
     };
     await fs.writeFile(previewReportPath, JSON.stringify(preview, null, 2));

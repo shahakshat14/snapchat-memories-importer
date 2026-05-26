@@ -40,17 +40,26 @@ async function prepareMergedMedia({ extractedDir, mergedDir, onProgress = () => 
 
 async function verifyMergedMedia(media, sampleSize = 25) {
   const sample = [];
+  const issueFiles = [];
+  const byYear = {};
+  const byMonth = {};
+  const timestampGroups = new Map();
+  const matchCounts = {};
   let withDate = 0;
   let withGps = 0;
   let missingFiles = 0;
   let unreadableFiles = 0;
+  let oldest = null;
+  let newest = null;
   const sourceCounts = {};
   const warnings = [];
 
   for (const item of media) {
     sourceCounts[item.source] = (sourceCounts[item.source] || 0) + 1;
+    matchCounts[item.matchedBy || 'unknown'] = (matchCounts[item.matchedBy || 'unknown'] || 0) + 1;
     if (!fss.existsSync(item.mergedPath)) {
       missingFiles += 1;
+      issueFiles.push(issueRecord(item, 'missing-file', 'Merged file is missing from disk.'));
       continue;
     }
 
@@ -64,11 +73,28 @@ async function verifyMergedMedia(media, sampleSize = 25) {
         path: item.mergedPath,
         reason: error?.message || String(error)
       });
+      issueFiles.push(issueRecord(item, 'unreadable-file', error?.message || String(error)));
       continue;
     }
-    const hasDate = Boolean(tags.DateTimeOriginal?.rawValue || tags.DateCreated?.rawValue);
+    const dateValue = tags.DateTimeOriginal?.rawValue || tags.DateCreated?.rawValue || null;
+    const date = parseExifDateValue(dateValue);
+    const hasDate = Boolean(dateValue);
     const hasGps = Number.isFinite(Number(tags.GPSLatitude)) && Number.isFinite(Number(tags.GPSLongitude));
-    if (hasDate) withDate += 1;
+    if (hasDate) {
+      withDate += 1;
+      if (date) {
+        oldest = !oldest || date < oldest ? date : oldest;
+        newest = !newest || date > newest ? date : newest;
+        byYear[String(date.getUTCFullYear())] = (byYear[String(date.getUTCFullYear())] || 0) + 1;
+        const monthKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+        byMonth[monthKey] = (byMonth[monthKey] || 0) + 1;
+        const timestampKey = date.toISOString();
+        if (!timestampGroups.has(timestampKey)) timestampGroups.set(timestampKey, []);
+        timestampGroups.get(timestampKey).push(path.basename(item.mergedPath));
+      }
+    } else {
+      issueFiles.push(issueRecord(item, 'missing-date', 'No embedded EXIF/XMP/QuickTime date was readable after merge.'));
+    }
     if (hasGps) withGps += 1;
 
     if (sample.length < sampleSize) {
@@ -84,6 +110,11 @@ async function verifyMergedMedia(media, sampleSize = 25) {
     }
   }
 
+  const duplicateTimestamps = [...timestampGroups.entries()]
+    .filter(([, files]) => files.length > 1)
+    .map(([timestamp, files]) => ({ timestamp, count: files.length, files: files.slice(0, 10) }))
+    .sort((left, right) => right.count - left.count || left.timestamp.localeCompare(right.timestamp));
+
   return {
     total: media.length,
     withDate,
@@ -91,9 +122,80 @@ async function verifyMergedMedia(media, sampleSize = 25) {
     missingFiles,
     unreadableFiles,
     sourceCounts,
+    matchCounts,
+    timeline: {
+      oldest: oldest ? oldest.toISOString() : null,
+      newest: newest ? newest.toISOString() : null,
+      byYear,
+      byMonth,
+      duplicateTimestamps
+    },
+    issueFiles,
     warnings,
     sample
   };
+}
+
+async function createReviewArtifacts({ mergedDir, media, verification, skippedDownloadLinks = [], exifWriteWarnings = [], mediaRepairResults = [] }) {
+  const reviewDir = path.join(mergedDir, '_Needs Review');
+  const damagedDir = path.join(reviewDir, 'Damaged Videos');
+  const missingDatesDir = path.join(reviewDir, 'Missing Dates');
+  const skippedDownloadsDir = path.join(reviewDir, 'Skipped Downloads');
+  const copied = [];
+
+  const damagedPaths = new Set([
+    ...exifWriteWarnings.map((item) => item.path).filter(Boolean),
+    ...mediaRepairResults.filter((item) => !item.repaired).map((item) => item.path).filter(Boolean)
+  ]);
+  const missingDatePaths = new Set((verification.issueFiles || [])
+    .filter((item) => item.type === 'missing-date')
+    .map((item) => item.path)
+    .filter(Boolean));
+
+  for (const file of damagedPaths) {
+    if (!fss.existsSync(file)) continue;
+    await fs.mkdir(damagedDir, { recursive: true });
+    const destination = await uniqueDestination(path.join(damagedDir, path.basename(file)));
+    await fs.copyFile(file, destination);
+    copied.push({ type: 'damaged-video', originalPath: file, reviewPath: destination });
+  }
+
+  for (const file of missingDatePaths) {
+    if (!fss.existsSync(file) || damagedPaths.has(file)) continue;
+    await fs.mkdir(missingDatesDir, { recursive: true });
+    const destination = await uniqueDestination(path.join(missingDatesDir, path.basename(file)));
+    await fs.copyFile(file, destination);
+    copied.push({ type: 'missing-date', originalPath: file, reviewPath: destination });
+  }
+
+  if (skippedDownloadLinks.length) {
+    await fs.mkdir(skippedDownloadsDir, { recursive: true });
+    await fs.writeFile(path.join(skippedDownloadsDir, 'skipped-downloads.json'), JSON.stringify(skippedDownloadLinks, null, 2));
+  }
+
+  const report = {
+    createdAt: new Date().toISOString(),
+    reviewDir,
+    copied,
+    counts: {
+      damagedVideos: copied.filter((item) => item.type === 'damaged-video').length,
+      missingDates: copied.filter((item) => item.type === 'missing-date').length,
+      skippedDownloads: skippedDownloadLinks.length,
+      exifWarnings: exifWriteWarnings.length
+    },
+    issues: verification.issueFiles || [],
+    skippedDownloadLinks,
+    exifWriteWarnings,
+    mediaRepairResults
+  };
+
+  if (copied.length || skippedDownloadLinks.length || exifWriteWarnings.length || (verification.issueFiles || []).length) {
+    await fs.mkdir(reviewDir, { recursive: true });
+    await fs.writeFile(path.join(reviewDir, 'review-report.json'), JSON.stringify(report, null, 2));
+  }
+
+  await fs.writeFile(path.join(mergedDir, 'Import Summary.html'), renderImportSummaryHtml({ media, verification, report }));
+  return report;
 }
 
 async function materializeMedia(directMatches, metadataEntries, mergedDir, onProgress = () => {}) {
@@ -452,6 +554,91 @@ function formatExifDate(date) {
   ].join(':') + ` ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
 }
 
+function parseExifDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  const raw = typeof value === 'object' && value.rawValue ? value.rawValue : String(value);
+  const normalized = raw
+    .replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')
+    .replace(/\.000Z$/, 'Z')
+    .replace(/\s+/, 'T');
+  const parsed = new Date(normalized.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(normalized) ? normalized : `${normalized}Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function issueRecord(item, type, reason) {
+  return {
+    type,
+    reason,
+    fileName: item?.mergedPath ? path.basename(item.mergedPath) : item?.file ? path.basename(item.file) : null,
+    path: item?.mergedPath || item?.file || null,
+    source: item?.source || null,
+    matchedBy: item?.matchedBy || null
+  };
+}
+
+function renderImportSummaryHtml({ media, verification, report }) {
+  const timeline = verification.timeline || {};
+  const issueRows = (verification.issueFiles || []).slice(0, 250)
+    .map((item) => `<tr><td>${escapeHtml(item.type)}</td><td>${escapeHtml(item.fileName || '')}</td><td>${escapeHtml(item.reason || '')}</td></tr>`)
+    .join('');
+  const yearRows = Object.entries(timeline.byYear || {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([year, count]) => `<tr><td>${escapeHtml(year)}</td><td>${count}</td></tr>`)
+    .join('');
+  const duplicateRows = (timeline.duplicateTimestamps || []).slice(0, 100)
+    .map((item) => `<tr><td>${escapeHtml(item.timestamp)}</td><td>${item.count}</td><td>${escapeHtml(item.files.join(', '))}</td></tr>`)
+    .join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Snapchat Import Summary</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #201f1d; background: #fbfaf7; }
+    h1, h2 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 20px 0; }
+    .card { border: 1px solid #ded8ce; border-radius: 8px; background: #fff; padding: 14px; }
+    .value { display: block; font-size: 28px; font-weight: 800; }
+    table { width: 100%; border-collapse: collapse; background: #fff; margin: 12px 0 28px; }
+    th, td { border-bottom: 1px solid #eee8df; padding: 9px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    th { background: #f7f3ed; }
+  </style>
+</head>
+<body>
+  <h1>Snapchat Import Summary</h1>
+  <p>Generated ${escapeHtml(new Date().toISOString())}</p>
+  <div class="grid">
+    <div class="card"><span class="value">${verification.total}</span>Merged files</div>
+    <div class="card"><span class="value">${verification.withDate}</span>With date</div>
+    <div class="card"><span class="value">${verification.withGps}</span>With GPS</div>
+    <div class="card"><span class="value">${verification.issueFiles?.length || 0}</span>Review issues</div>
+    <div class="card"><span class="value">${report.counts?.damagedVideos || 0}</span>Damaged copies</div>
+    <div class="card"><span class="value">${timeline.duplicateTimestamps?.length || 0}</span>Duplicate timestamps</div>
+  </div>
+  <h2>Date Range</h2>
+  <p>${escapeHtml(timeline.oldest || 'Unknown')} to ${escapeHtml(timeline.newest || 'Unknown')}</p>
+  <h2>Files By Year</h2>
+  <table><thead><tr><th>Year</th><th>Files</th></tr></thead><tbody>${yearRows || '<tr><td colspan="2">No dated files</td></tr>'}</tbody></table>
+  <h2>Duplicate Timestamps</h2>
+  <table><thead><tr><th>Timestamp</th><th>Count</th><th>Sample files</th></tr></thead><tbody>${duplicateRows || '<tr><td colspan="3">No duplicate timestamps detected</td></tr>'}</tbody></table>
+  <h2>Needs Review</h2>
+  <table><thead><tr><th>Type</th><th>File</th><th>Reason</th></tr></thead><tbody>${issueRows || '<tr><td colspan="3">No review issues detected</td></tr>'}</tbody></table>
+  <p>Total copied media checked: ${media.length}</p>
+</body>
+</html>`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function downloadMedia(url, destination) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Could not download Snapchat media: ${response.status} ${url}`);
@@ -744,6 +931,7 @@ module.exports = {
   MEDIA_EXTENSIONS,
   prepareMergedMedia,
   verifyMergedMedia,
+  createReviewArtifacts,
   materializeMedia,
   loadMetadataEntries,
   buildMatches,

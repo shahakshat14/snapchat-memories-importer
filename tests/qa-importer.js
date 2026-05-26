@@ -88,12 +88,24 @@ async function testDamagedVideoRepairIsReported(tempRoot) {
   await fs.mkdir(extractDir, { recursive: true });
   await extractZip(zipPath, { dir: extractDir });
   const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+  const verification = await importer.verifyMergedMedia(result.media, 10);
+  const review = await importer.createReviewArtifacts({
+    mergedDir,
+    media: result.media,
+    verification,
+    skippedDownloadLinks: result.skippedDownloads,
+    exifWriteWarnings: result.media.exifWriteWarnings,
+    mediaRepairResults: result.media.mediaRepairResults
+  });
 
   assert.equal(result.media.length, 1, 'damaged videos should still be copied into the preview output');
   assert.equal(result.media.exifWriteWarnings.length, 1, 'damaged videos should report EXIF repair/write warnings without aborting preview');
   assert.equal(result.media.mediaRepairResults.length, 1, 'damaged videos should run through the automatic repair path');
   assert.equal(result.media.mediaRepairResults[0].repaired, false, 'unrepairable fake video should be marked as not repaired');
   assert.match(result.media.exifWriteWarnings[0].repairStatus, /repair-failed|ffmpeg-unavailable/);
+  assert.equal(review.counts.damagedVideos, 1, 'damaged videos should be copied into Needs Review');
+  assert.ok(fss.existsSync(path.join(mergedDir, '_Needs Review', 'review-report.json')), 'review report should be written for damaged media');
+  assert.ok(fss.existsSync(path.join(mergedDir, 'Import Summary.html')), 'human-readable import summary should be written');
 }
 
 async function testSnapchatMemoryDateFallback(tempRoot) {
@@ -222,6 +234,9 @@ async function testZipWithEmbeddedMedia(tempRoot) {
   assert.equal(verification.withDate, 1, 'preview verification should see embedded date');
   assert.equal(verification.withGps, 1, 'preview verification should see embedded GPS');
   assert.equal(verification.missingFiles, 0, 'preview verification should not have missing files');
+  assert.equal(verification.timeline.oldest, '2024-01-02T03:04:05.000Z', 'timeline audit should capture oldest date');
+  assert.equal(verification.timeline.newest, '2024-01-02T03:04:05.000Z', 'timeline audit should capture newest date');
+  assert.equal(verification.timeline.byYear['2024'], 1, 'timeline audit should count files by year');
   await assertExif(result.media[0].mergedPath, {
     datePrefix: '2024:01:02 03:04:05',
     latitude: 43.6532,
