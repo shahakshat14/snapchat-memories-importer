@@ -15,7 +15,7 @@ The app can ask for:
 2. A Google OAuth Desktop client JSON, only if uploading to Google Photos
 3. Google Photos login, only if uploading to Google Photos
 
-Then it extracts each export into an isolated folder, finds photos/videos and metadata across all archives, writes available EXIF/XMP date and GPS data into copied media files, and shows a preview for confirmation before any export/import/upload action.
+Then it extracts each export into an isolated folder, finds photos/videos and metadata across all archives, writes available EXIF/XMP date and GPS data into copied media files, gives the merged media clean chronological filenames, and shows a preview for confirmation before any export/import/upload action.
 
 After reviewing the preview, you can:
 
@@ -100,6 +100,15 @@ Apple Photos import uses the local macOS Photos app through AppleScript. macOS m
 ## Merged ZIP Notes
 
 The merged ZIP is created next to the preview folder in Documents. It contains the merged media folder with EXIF/XMP already written, so you can manually upload it anywhere.
+
+Merged media files are renamed to a readable chronological format:
+
+```text
+YYYY-MM-DD_HH-mm-ss_snapchat-memory.jpg
+YYYY-MM-DD_HH-mm-ss_snapchat-memory-2.jpg
+```
+
+The suffix is added only when multiple Memories share the same timestamp.
 
 ## Security and Privacy
 

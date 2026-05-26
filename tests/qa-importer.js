@@ -20,6 +20,7 @@ async function main() {
     await testZipWithDownloadLinks(tempRoot);
     await testFailedMediaDownloadIsSkipped(tempRoot);
     await testSnapchatMemoryDateFallback(tempRoot);
+    await testReadableFilenameCollisions(tempRoot);
     await testDamagedVideoRepairIsReported(tempRoot);
     await testMultipleMyDataZips(tempRoot);
     console.log('QA importer tests passed');
@@ -27,6 +28,36 @@ async function main() {
     await exiftool.end();
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+async function testReadableFilenameCollisions(tempRoot) {
+  const fixture = path.join(tempRoot, 'readable-filename-collisions');
+  const source = path.join(fixture, 'source');
+  const extractDir = path.join(fixture, 'extract');
+  const mergedDir = path.join(fixture, 'merged');
+  await fs.mkdir(path.join(source, 'memories'), { recursive: true });
+  await fs.mkdir(path.join(source, 'json'), { recursive: true });
+
+  await writeSampleJpeg(path.join(source, 'memories', 'burst-a.jpg'));
+  await writeSampleJpeg(path.join(source, 'memories', 'burst-b.jpg'));
+  await fs.writeFile(
+    path.join(source, 'json', 'memories_history.json'),
+    JSON.stringify([
+      { Date: '2024-02-03T04:05:06.000Z', 'File Name': 'burst-a.jpg' },
+      { Date: '2024-02-03T04:05:06.000Z', 'File Name': 'burst-b.jpg' }
+    ])
+  );
+
+  const zipPath = await zipFixture(source, path.join(fixture, 'snapchat-readable-names.zip'));
+  await fs.mkdir(extractDir, { recursive: true });
+  await extractZip(zipPath, { dir: extractDir });
+  const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+  const names = result.media.map((item) => path.basename(item.mergedPath)).sort();
+
+  assert.deepEqual(names, [
+    '2024-02-03_04-05-06_snapchat-memory-2.jpg',
+    '2024-02-03_04-05-06_snapchat-memory.jpg'
+  ]);
 }
 
 async function testDamagedVideoRepairIsReported(tempRoot) {
@@ -99,7 +130,7 @@ async function testSnapchatMemoryDateFallback(tempRoot) {
   assert.equal(result.metadataEntries.length, 1, 'Saved Media wrapper should flatten into individual records');
   assert.equal(result.media.length, 1, 'date fallback should merge the primary Snapchat memory file');
   assert.equal(result.media[0].matchedBy, 'snapchat-date-media-order');
-  assert.equal(path.basename(result.media[0].mergedPath), '2025-05-24_F052114D-7BD5-45F1-B64A-180F3A40806D-main.jpg');
+  assert.equal(path.basename(result.media[0].mergedPath), '2025-05-24_02-56-57_snapchat-memory.jpg');
   assert.equal(verification.withDate, 1, 'date fallback should write the metadata date');
   assert.equal(verification.withGps, 1, 'date fallback should parse the Snapchat Location string');
   await assertExif(result.media[0].mergedPath, {
@@ -150,8 +181,8 @@ async function testMultipleMyDataZips(tempRoot) {
   const verification = await importer.verifyMergedMedia(result.media, 10);
   assert.equal(result.media.length, 2, 'multiple mydata zips should merge both archives');
   assert.equal(verification.withDate, 2, 'both split archive dates should be written');
-  await assertExif(path.join(mergedDir, 'snap-one.jpg'), { datePrefix: '2020:01:02 03:04:05' });
-  await assertExif(path.join(mergedDir, 'snap-two.jpg'), { datePrefix: '2022:03:04 05:06:07' });
+  await assertExif(path.join(mergedDir, '2020-01-02_03-04-05_snapchat-memory.jpg'), { datePrefix: '2020:01:02 03:04:05' });
+  await assertExif(path.join(mergedDir, '2022-03-04_05-06-07_snapchat-memory.jpg'), { datePrefix: '2022:03:04 05:06:07' });
 }
 
 async function testZipWithEmbeddedMedia(tempRoot) {
@@ -197,7 +228,8 @@ async function testZipWithEmbeddedMedia(tempRoot) {
     longitude: -79.3832
   });
   exportMergedZip(mergedDir, exportedZip);
-  await assertExportedZipContainsExif(exportedZip, path.basename(mergedDir), 'snap-local.jpg', {
+  assert.equal(path.basename(result.media[0].mergedPath), '2024-01-02_03-04-05_snapchat-memory.jpg');
+  await assertExportedZipContainsExif(exportedZip, path.basename(mergedDir), '2024-01-02_03-04-05_snapchat-memory.jpg', {
     datePrefix: '2024:01:02 03:04:05',
     latitude: 43.6532,
     longitude: -79.3832

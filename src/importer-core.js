@@ -109,8 +109,9 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
   for (let index = 0; index < matchedDirect.length; index += 1) {
     const match = matchedDirect[index];
     usedMetadata.add(match.metadata);
-    const destination = await uniqueDestination(path.join(mergedDir, path.basename(match.file)));
-    emitMaterializeProgress(onProgress, materialized.length, totalWork, `Copying ${path.basename(match.file)}`, match.file, 'copying');
+    const outputName = outputFilenameForMatch(match, path.basename(match.file));
+    const destination = await uniqueDestination(path.join(mergedDir, outputName));
+    emitMaterializeProgress(onProgress, materialized.length, totalWork, `Copying ${path.basename(match.file)} as ${path.basename(destination)}`, match.file, 'copying');
     await fs.copyFile(match.file, destination);
     emitMaterializeProgress(onProgress, materialized.length, totalWork, `Writing metadata to ${path.basename(destination)}`, destination, 'writing-exif');
     const exifResult = await tryWriteExif(destination, match);
@@ -132,9 +133,10 @@ async function materializeMedia(directMatches, metadataEntries, mergedDir, onPro
   for (const entry of downloadable) {
     const downloadUrl = findDownloadUrl(entry);
     const filename = filenameForMetadata(entry, downloadUrl);
-    const destination = await uniqueDestination(path.join(mergedDir, filename));
+    const matchName = outputFilenameForMatch(metadataMatchFromEntry(filename, entry, 'download-link'), filename);
+    const destination = await uniqueDestination(path.join(mergedDir, matchName));
     try {
-      emitMaterializeProgress(onProgress, materialized.length + skippedDownloads.length, totalWork, `Downloading ${filename}`, downloadUrl, 'downloading');
+      emitMaterializeProgress(onProgress, materialized.length + skippedDownloads.length, totalWork, `Downloading ${filename} as ${path.basename(destination)}`, downloadUrl, 'downloading');
       const downloadedPath = await downloadMedia(downloadUrl, destination);
       const match = metadataMatchFromEntry(downloadedPath, entry, 'download-link');
       emitMaterializeProgress(onProgress, materialized.length + skippedDownloads.length, totalWork, `Writing metadata to ${path.basename(downloadedPath)}`, downloadedPath, 'writing-exif');
@@ -167,6 +169,39 @@ function emitMaterializeProgress(onProgress, complete, total, message, subject, 
     subject,
     fileName: subject && typeof subject === 'string' ? path.basename(subject) : null
   });
+}
+
+function outputFilenameForMatch(match, fallbackName) {
+  const extension = normalizedMediaExtension(fallbackName || match.file);
+  if (!match.takenAt) return sanitizeFilename(fallbackName || `snapchat-memory${extension}`);
+  return `${formatFilenameDate(match.takenAt)}_snapchat-memory${extension}`;
+}
+
+function normalizedMediaExtension(file) {
+  const value = String(file || '');
+  const extension = (value.startsWith('.') && !value.slice(1).includes('.'))
+    ? value.toLowerCase()
+    : path.extname(value).toLowerCase();
+  return MEDIA_EXTENSIONS.has(extension) ? extension : '.jpg';
+}
+
+function formatFilenameDate(date) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return [
+    date.getUTCFullYear(),
+    pad(date.getUTCMonth() + 1),
+    pad(date.getUTCDate())
+  ].join('-') + `_${pad(date.getUTCHours())}-${pad(date.getUTCMinutes())}-${pad(date.getUTCSeconds())}`;
+}
+
+function sanitizeFilename(filename) {
+  const parsed = path.parse(path.basename(filename || 'snapchat-memory.jpg'));
+  const name = parsed.name
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'snapchat-memory';
+  const extension = normalizedMediaExtension(parsed.ext || filename);
+  return `${name}${extension}`;
 }
 
 async function setFilesystemDates(file, date) {
