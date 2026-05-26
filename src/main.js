@@ -14,6 +14,8 @@ const mime = require('mime-types');
 const importer = require('./importer-core');
 
 const SCOPES = ['https://www.googleapis.com/auth/photoslibrary.appendonly'];
+const OAUTH_CLIENT_FILE = '.google-oauth-client.json';
+const TOKEN_FILE = '.google-token.json';
 const execFile = promisify(execFileCallback);
 const MEDIA_EXTENSIONS = new Set([
   '.3g2', '.3gp', '.avif', '.bmp', '.gif', '.heic', '.jpeg', '.jpg', '.m4v',
@@ -58,17 +60,8 @@ if (isElectronRuntime) {
     return result.canceled ? null : result.filePaths;
   });
 
-  ipcMain.handle('choose-credentials', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Choose Google OAuth Desktop Client JSON',
-      properties: ['openFile'],
-      filters: [{ name: 'JSON', extensions: ['json'] }]
-    });
-    return result.canceled ? null : result.filePaths[0];
-  });
-
-  ipcMain.handle('sign-in', async (_event, credentialsPath) => {
-    const auth = await signInWithGoogle(credentialsPath);
+  ipcMain.handle('sign-in', async () => {
+    const auth = await signInWithGoogle();
     return { email: auth.email };
   });
 
@@ -321,14 +314,8 @@ async function importPreparedIntoApplePhotos() {
   return report;
 }
 
-async function signInWithGoogle(credentialsPath) {
-  if (!credentialsPath) throw new Error('Choose a Google OAuth Desktop client JSON first.');
-  const raw = JSON.parse(await fs.readFile(credentialsPath, 'utf8'));
-  const config = raw.installed || raw.web;
-  if (!config?.client_id || !config?.client_secret) {
-    throw new Error('OAuth JSON must contain an installed Desktop client.');
-  }
-
+async function signInWithGoogle() {
+  const config = await loadOAuthClientConfig({ allowSetupPrompt: true });
   const server = http.createServer();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const port = server.address().port;
@@ -359,8 +346,69 @@ async function signInWithGoogle(credentialsPath) {
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens);
   const tokenInfo = await oauth2Client.getTokenInfo(tokens.access_token);
-  await saveToken({ ...tokens, credentialsPath });
+  await saveToken(tokens);
   return { email: tokenInfo.email || 'Google account connected' };
+}
+
+async function loadOAuthClientConfig({ allowSetupPrompt = false } = {}) {
+  const saved = await readOAuthClientConfig(savedOAuthClientPath());
+  if (saved) return saved;
+
+  const bundled = await readOAuthClientConfig(path.join(__dirname, '..', 'config', 'google-oauth-client.json'));
+  if (bundled) {
+    await saveOAuthClientConfig(bundled);
+    return bundled;
+  }
+
+  if (process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET) {
+    const config = {
+      client_id: process.env.GOOGLE_OAUTH_CLIENT_ID,
+      client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    };
+    await saveOAuthClientConfig(config);
+    return config;
+  }
+
+  if (!allowSetupPrompt) return null;
+  const selected = await chooseOAuthClientConfig();
+  if (!selected) {
+    throw new Error('Google sign-in needs a one-time OAuth client setup before the login page can open.');
+  }
+  await saveOAuthClientConfig(selected);
+  return selected;
+}
+
+async function chooseOAuthClientConfig() {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'One-time Google sign-in setup',
+    message: 'Select the Google OAuth Desktop client JSON once. The app will remember it for future Google logins.',
+    properties: ['openFile'],
+    filters: [{ name: 'Google OAuth Desktop client JSON', extensions: ['json'] }]
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const config = await readOAuthClientConfig(result.filePaths[0]);
+  if (!config) throw new Error('OAuth JSON must contain an installed Desktop client.');
+  return config;
+}
+
+async function readOAuthClientConfig(file) {
+  if (!file || !fss.existsSync(file)) return null;
+  const raw = JSON.parse(await fs.readFile(file, 'utf8'));
+  const config = raw.installed || raw.web || raw;
+  if (!config?.client_id || !config?.client_secret) return null;
+  return {
+    client_id: config.client_id,
+    client_secret: config.client_secret
+  };
+}
+
+async function saveOAuthClientConfig(config) {
+  await fs.mkdir(app.getPath('userData'), { recursive: true });
+  await fs.writeFile(savedOAuthClientPath(), JSON.stringify({ installed: config }, null, 2), { mode: 0o600 });
+}
+
+function savedOAuthClientPath() {
+  return path.join(app.getPath('userData'), OAUTH_CLIENT_FILE);
 }
 
 async function uploadToGooglePhotos(merged, accessToken) {
@@ -434,11 +482,11 @@ async function retryFetch(url, options) {
 
 async function saveToken(token) {
   await fs.mkdir(app.getPath('userData'), { recursive: true });
-  await fs.writeFile(path.join(app.getPath('userData'), '.google-token.json'), JSON.stringify(token, null, 2));
+  await fs.writeFile(path.join(app.getPath('userData'), TOKEN_FILE), JSON.stringify(token, null, 2), { mode: 0o600 });
 }
 
 async function getSavedToken() {
-  const file = path.join(app.getPath('userData'), '.google-token.json');
+  const file = path.join(app.getPath('userData'), TOKEN_FILE);
   if (!fss.existsSync(file)) return null;
   return JSON.parse(await fs.readFile(file, 'utf8'));
 }
@@ -448,10 +496,10 @@ async function getValidAccessToken() {
   if (!token?.access_token) return null;
   const expiresAt = token.expiry_date || 0;
   if (expiresAt > Date.now() + 60_000) return token.access_token;
-  if (!token.refresh_token || !token.credentialsPath) return token.access_token;
+  if (!token.refresh_token) return token.access_token;
 
-  const raw = JSON.parse(await fs.readFile(token.credentialsPath, 'utf8'));
-  const config = raw.installed || raw.web;
+  const config = await loadOAuthClientConfig();
+  if (!config) return token.access_token;
   const oauth2Client = new OAuth2Client(config.client_id, config.client_secret);
   oauth2Client.setCredentials(token);
   const refreshed = await oauth2Client.refreshAccessToken();

@@ -12,3 +12,4 @@ out/
 work/
 client_secret.json
 client_secret*.json
+config/google-oauth-client.json

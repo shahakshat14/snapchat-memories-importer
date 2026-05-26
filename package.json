@@ -67,6 +67,7 @@
     ],
     "files": [
       "src/**/*",
+      "config/google-oauth-client.json",
       "node_modules/**/*",
       "package.json"
     ]

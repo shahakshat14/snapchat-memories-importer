@@ -12,8 +12,7 @@ The macOS DMG is universal for Intel and Apple Silicon Macs. It requires macOS 1
 The app can ask for:
 
 1. One or more Snapchat export `.zip` files, or a folder containing Snapchat export `.zip` files
-2. A Google OAuth Desktop client JSON, only if uploading to Google Photos
-3. Google Photos login, only if uploading to Google Photos
+2. Google Photos login, only if uploading to Google Photos
 
 Then it extracts each export into an isolated folder, finds photos/videos and metadata across all archives, writes available EXIF/XMP date and GPS data into copied media files, gives the merged media clean chronological filenames, and shows a preview with timeline and issue audits before any export/import/upload action.
 
@@ -23,17 +22,21 @@ After reviewing the preview, you can:
 - Import the merged media into Apple Photos.
 - Upload the merged media to Google Photos.
 
-## Why Google OAuth JSON Is Required
+## Google Photos Login
 
-Google Photos upload is not anonymous. Before the app can show a Google login, Google requires an OAuth client ID from a Google Cloud project where the Google Photos Library API is enabled.
+Google Photos upload is not anonymous. Click **Sign in with Google Photos** to open the Google login page.
 
-Create it once:
+Developer builds need a one-time OAuth client setup before Google can show that login page. If the app does not already have a saved or bundled OAuth client, it will ask for a Google OAuth Desktop client JSON once, then remember it locally for future logins.
+
+To create that setup file:
 
 1. Go to Google Cloud Console.
 2. Enable **Google Photos Library API**.
 3. Create an OAuth client for **Desktop app**.
 4. Download the JSON file.
-5. Select that JSON inside the app.
+5. Select that JSON only if the app asks for one-time Google sign-in setup.
+
+Release builds can avoid the one-time setup prompt by bundling a private `config/google-oauth-client.json` at build time or setting `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in the build environment.
 
 The app requests only `https://www.googleapis.com/auth/photoslibrary.appendonly`.
 
