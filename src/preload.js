@@ -3,8 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('snapImporter', {
   platform: process.platform,
   chooseZip: () => ipcRenderer.invoke('choose-zip'),
-  chooseCredentials: () => ipcRenderer.invoke('choose-credentials'),
-  signIn: (credentialsPath) => ipcRenderer.invoke('sign-in', credentialsPath),
+  signIn: () => ipcRenderer.invoke('sign-in'),
   prepareImport: (options) => ipcRenderer.invoke('prepare-import', options),
   uploadPrepared: () => ipcRenderer.invoke('upload-prepared'),
   exportPreparedZip: () => ipcRenderer.invoke('export-prepared-zip'),

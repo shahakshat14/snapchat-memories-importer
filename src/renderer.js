@@ -1,6 +1,5 @@
 const state = {
   zipPaths: [],
-  credentialsPath: null,
   signedIn: false,
   running: false,
   preview: null
@@ -8,7 +7,6 @@ const state = {
 
 const elements = {
   zipButton: document.querySelector('#zipButton'),
-  credentialsButton: document.querySelector('#credentialsButton'),
   signInButton: document.querySelector('#signInButton'),
   prepareButton: document.querySelector('#prepareButton'),
   uploadButton: document.querySelector('#uploadButton'),
@@ -19,7 +17,6 @@ const elements = {
   openMergedButton: document.querySelector('#openMergedButton'),
   reviewCheckbox: document.querySelector('#reviewCheckbox'),
   zipPath: document.querySelector('#zipPath'),
-  credentialsPath: document.querySelector('#credentialsPath'),
   accountLabel: document.querySelector('#accountLabel'),
   statusPill: document.querySelector('#statusPill'),
   stageLabel: document.querySelector('#stageLabel'),
@@ -58,24 +55,6 @@ elements.zipButton.addEventListener('click', async () => {
   hidePreview();
   setMessage(`${zipPaths.length} Snapchat export source${zipPaths.length === 1 ? '' : 's'} selected. Prepare a preview before uploading.`);
   updateButtons();
-});
-
-elements.credentialsButton.addEventListener('click', async () => {
-  try {
-    const credentialsPath = await window.snapImporter.chooseCredentials();
-    if (!credentialsPath) return;
-    state.credentialsPath = credentialsPath;
-    state.signedIn = false;
-    elements.credentialsPath.textContent = credentialsPath;
-    elements.accountLabel.textContent = 'Not connected';
-    updateButtons();
-    await connectGoogle();
-  } catch (error) {
-    setError(error);
-  } finally {
-    setBusy(false);
-    updateButtons();
-  }
 });
 
 elements.signInButton.addEventListener('click', async () => {
@@ -128,12 +107,9 @@ elements.uploadButton.addEventListener('click', async () => {
 });
 
 async function connectGoogle() {
-  if (!state.credentialsPath) {
-    throw new Error('Choose the Google OAuth JSON first.');
-  }
   setBusy(true, 'Opening Google login');
   appendLogLine('Opening Google login in your browser', 'connected');
-  const account = await window.snapImporter.signIn(state.credentialsPath);
+  const account = await window.snapImporter.signIn();
   state.signedIn = true;
   elements.accountLabel.textContent = account.email;
   setProgress({ stage: 'connected', percent: 0, message: 'Google Photos connected. Upload is available after preview approval.' });
@@ -356,14 +332,13 @@ function setError(error) {
 
 function updateButtons() {
   const reviewedReady = state.preview?.readyToUpload && elements.reviewCheckbox.checked;
-  elements.signInButton.disabled = state.running || !state.credentialsPath;
+  elements.signInButton.disabled = state.running;
   elements.prepareButton.disabled = state.running || !state.zipPaths.length;
   elements.zipExportButton.disabled = state.running || !reviewedReady;
   elements.applePhotosButton.disabled = state.running || !reviewedReady || window.snapImporter.platform !== 'darwin';
-  elements.uploadButton.disabled = state.running || !reviewedReady || (!state.signedIn && !state.credentialsPath);
+  elements.uploadButton.disabled = state.running || !reviewedReady;
   elements.cancelButton.disabled = !state.running;
   elements.zipButton.disabled = state.running;
-  elements.credentialsButton.disabled = state.running;
   elements.openMergedButton.disabled = state.running || !state.preview?.mergedDir;
 }
 
