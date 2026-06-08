@@ -2,6 +2,8 @@
 
 A desktop app that imports a Snapchat data export into Google Photos, Apple Photos, or a portable merged EXIF zip.
 
+Website: [https://shahakshat14.github.io/snapchat-memories-importer/](https://shahakshat14.github.io/snapchat-memories-importer/)
+
 ## Direct Downloads
 
 - [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-0.1.0.dmg)
@@ -21,6 +23,19 @@ To open it on macOS:
 Full Mac instructions: [docs/MAC_INSTALL.md](docs/MAC_INSTALL.md).
 
 The macOS DMG is universal for Intel and Apple Silicon Macs. It requires macOS 12 Monterey or newer because Electron 39 relies on Chromium versions that no longer support Big Sur or older macOS releases.
+
+### Windows beta install note
+
+The free GitHub beta installer is not backed by a paid Windows code-signing certificate yet, so Microsoft Defender SmartScreen may show **"Windows protected your PC"** or a browser may warn that the file is uncommon.
+
+To open it on Windows:
+
+1. Download the `.exe`.
+2. If SmartScreen appears, click **More info**.
+3. Confirm the app name is **Snapchat Memories Importer**.
+4. Click **Run anyway**.
+
+Full Windows instructions: [docs/WINDOWS_INSTALL.md](docs/WINDOWS_INSTALL.md).
 
 The app can ask for:
 

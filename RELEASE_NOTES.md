@@ -20,6 +20,18 @@ To open it:
 
 Full guide: https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/MAC_INSTALL.md
 
+## Important Windows Note
+
+The Windows app is not backed by a paid code-signing certificate yet, so Microsoft Defender SmartScreen may show a warning.
+
+To open it:
+
+1. Click **More info**.
+2. Confirm the app name is **Snapchat Memories Importer**.
+3. Click **Run anyway**.
+
+Full guide: https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/WINDOWS_INSTALL.md
+
 ## Highlights
 
 - Merge Snapchat Memories metadata into copied photo/video files.
