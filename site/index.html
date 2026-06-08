@@ -17,6 +17,8 @@
         </a>
         <div class="nav-links">
           <a href="#downloads">Downloads</a>
+          <a href="#safety">Safety</a>
+          <a href="#faq">FAQ</a>
           <a href="#install">Install</a>
           <a href="https://github.com/shahakshat14/snapchat-memories-importer">GitHub</a>
         </div>
@@ -35,42 +37,7 @@
         </div>
 
         <div class="product-shot" aria-label="Product workflow preview">
-          <div class="app-window">
-            <div class="window-top">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <div class="app-content">
-              <div class="step active">
-                <strong>Select export</strong>
-                <span>8 mydata zip files ready</span>
-              </div>
-              <div class="step">
-                <strong>Preview metadata</strong>
-                <span>5,812 memories scanned</span>
-              </div>
-              <div class="metrics">
-                <div>
-                  <span class="metric">99.9%</span>
-                  <span class="label">accounted</span>
-                </div>
-                <div>
-                  <span class="metric">25</span>
-                  <span class="label">sample test</span>
-                </div>
-              </div>
-              <div class="timeline">
-                <span style="height: 34%"></span>
-                <span style="height: 58%"></span>
-                <span style="height: 46%"></span>
-                <span style="height: 80%"></span>
-                <span style="height: 64%"></span>
-                <span style="height: 52%"></span>
-                <span style="height: 72%"></span>
-              </div>
-            </div>
-          </div>
+          <img class="app-screenshot" src="assets/screenshots/app-home.png" alt="Snapchat Memories Importer main screen with export, preview, and destination steps.">
         </div>
       </section>
     </header>
@@ -96,6 +63,14 @@
             <a class="guide-link" href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/WINDOWS_INSTALL.md">Windows install guide</a>
             <code class="checksum" data-checksum="windows">SHA-256 b5bfe7f81c8cde628c5df1c5347ded2bfe302322b7c285da1005109afbe0a342</code>
           </article>
+        </div>
+        <div class="verify-panel">
+          <h3>Verify your download</h3>
+          <p>After downloading, compare the printed SHA-256 with the checksum above.</p>
+          <div class="command-grid">
+            <code>shasum -a 256 ~/Downloads/Snapchat-Memories-Importer-0.1.0.dmg</code>
+            <code>Get-FileHash "$env:USERPROFILE\Downloads\Snapchat-Memories-Importer-Setup-0.1.0.exe" -Algorithm SHA256</code>
+          </div>
         </div>
       </section>
 
@@ -124,6 +99,17 @@
         </div>
       </section>
 
+      <section class="section screenshot-section">
+        <div class="section-heading">
+          <p class="eyebrow">Screenshots</p>
+          <h2>The app pauses before anything uploads.</h2>
+        </div>
+        <figure class="wide-shot">
+          <img src="assets/screenshots/app-home.png" alt="Snapchat Memories Importer main workflow screen.">
+          <figcaption>Select Snapchat export zips, run Test 25, prepare a full preview, then choose Apple Photos, ZIP, or Google.</figcaption>
+        </figure>
+      </section>
+
       <section class="section features">
         <div class="feature">
           <h3>Preview before upload</h3>
@@ -136,6 +122,75 @@
         <div class="feature">
           <h3>Portable output</h3>
           <p>Create a new merged ZIP if you want to manually upload or archive your cleaned Memories anywhere.</p>
+        </div>
+      </section>
+
+      <section class="section safety" id="safety">
+        <div class="section-heading">
+          <p class="eyebrow">Safety</p>
+          <h2>What happens to your data</h2>
+        </div>
+        <div class="info-grid">
+          <article>
+            <h3>Local first</h3>
+            <p>Extraction, EXIF merge, duplicate detection, reports, and ZIP export happen on your computer before any destination is used.</p>
+          </article>
+          <article>
+            <h3>Google only after consent</h3>
+            <p>Google Photos upload starts only after preview approval and browser sign-in. The app requests the append-only Photos scope.</p>
+          </article>
+          <article>
+            <h3>Support bundle is limited</h3>
+            <p>Support bundles include app version, OS, counts, report paths, and failed filenames. They do not include media contents, OAuth tokens, or export zips.</p>
+          </article>
+          <article>
+            <h3>Trust warnings explained</h3>
+            <p>Mac and Windows warnings happen because this free beta is not notarized or trusted-signed yet. The source and release assets are public on GitHub.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section troubleshooting" id="troubleshooting">
+        <div class="section-heading">
+          <p class="eyebrow">Troubleshooting</p>
+          <h2>Start with the symptom</h2>
+        </div>
+        <div class="trouble-list">
+          <a href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/MAC_INSTALL.md"><strong>Mac will not open</strong><span>Use right-click Open or Privacy & Security > Open Anyway.</span></a>
+          <a href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/WINDOWS_INSTALL.md"><strong>Windows blocked installer</strong><span>Use More info > Run anyway after verifying the filename.</span></a>
+          <a href="https://github.com/shahakshat14/snapchat-memories-importer/issues/new/choose"><strong>Apple Photos rejected files</strong><span>Use the final report and include rejected filenames in an issue.</span></a>
+          <a href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/GOOGLE_PHOTOS_OAUTH.md"><strong>Google login missing</strong><span>Direct Google upload needs OAuth bundled in the build.</span></a>
+          <a href="https://github.com/shahakshat14/snapchat-memories-importer/issues/new/choose"><strong>Snapchat links expired</strong><span>Run with embedded export media when possible or report skipped links.</span></a>
+          <a href="https://github.com/shahakshat14/snapchat-memories-importer/issues/new/choose"><strong>Dates look wrong</strong><span>Use the metadata inspector before/after row in your report.</span></a>
+        </div>
+      </section>
+
+      <section class="section faq" id="faq">
+        <div class="section-heading">
+          <p class="eyebrow">FAQ</p>
+          <h2>Before you run it</h2>
+        </div>
+        <div class="faq-grid">
+          <details open><summary>Do I need all mydata zips?</summary><p>Yes. Select every `mydata` zip part or the folder that contains them, especially when Snapchat split your export into multiple files.</p></details>
+          <details><summary>Will this delete my Snapchat export?</summary><p>No. Original Snapchat zips are never deleted automatically. Cleanup only targets generated importer output.</p></details>
+          <details><summary>Will duplicates be removed automatically?</summary><p>No. Exact duplicates are detected for review first. You choose whether to move duplicate candidates to Trash.</p></details>
+          <details><summary>Can I upload manually?</summary><p>Yes. Export the merged EXIF ZIP and upload it wherever you want.</p></details>
+          <details><summary>Why are some videos damaged?</summary><p>Some Snapchat downloads are incomplete or missing video indexes. The app tries repairs, but unrecoverable files are sent to Needs Review.</p></details>
+          <details><summary>Does Google upload read my library?</summary><p>The app uses the append-only Google Photos scope so it can add new media. It does not request broad read access.</p></details>
+        </div>
+      </section>
+
+      <section class="section release-info" id="release">
+        <div class="section-heading">
+          <p class="eyebrow">Version</p>
+          <h2>Current beta release</h2>
+        </div>
+        <div class="release-card">
+          <div>
+            <strong data-version>v0.1.0</strong>
+            <p id="releaseSummary">Includes Test 25 preview, EXIF/XMP merge, duplicate review, Apple Photos import, Google Photos upload when OAuth is configured, Support Bundle, and merged ZIP export.</p>
+          </div>
+          <a class="button secondary" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/tag/v0.1.0">Open release notes</a>
         </div>
       </section>
 
@@ -163,12 +218,29 @@
           </article>
         </div>
       </section>
+
+      <section class="section limitations">
+        <div class="section-heading">
+          <p class="eyebrow">Known limitations</p>
+          <h2>Transparent beta notes</h2>
+        </div>
+        <ul class="limitations-list">
+          <li>The Mac app is not Apple-notarized without paid Apple Developer credentials.</li>
+          <li>The Windows installer is not trusted-signed without a paid code-signing certificate.</li>
+          <li>Direct Google Photos upload needs a bundled Google OAuth Desktop client.</li>
+          <li>Some Snapchat media links expire or redirect to support pages.</li>
+          <li>Some damaged videos may be unrecoverable even after automatic repair attempts.</li>
+        </ul>
+      </section>
     </main>
 
     <footer class="footer">
       <span>Snapchat Memories Importer</span>
       <a href="https://github.com/shahakshat14/snapchat-memories-importer/releases/tag/v0.1.0">Release notes</a>
       <a href="https://github.com/shahakshat14/snapchat-memories-importer/issues/new/choose">Get support</a>
+      <a href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/SAFETY_AND_PRIVACY.md">Safety</a>
+      <a href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/TROUBLESHOOTING.md">Troubleshooting</a>
+      <a href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/FAQ.md">FAQ</a>
       <a href="https://github.com/shahakshat14/snapchat-memories-importer">Source on GitHub</a>
     </footer>
   </body>

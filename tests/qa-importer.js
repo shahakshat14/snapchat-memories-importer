@@ -56,7 +56,16 @@ function testWebsitePublicLaunchControls() {
   assert.match(html, /data-checksum="mac"/, 'website should show Mac checksum');
   assert.match(html, /data-checksum="windows"/, 'website should show Windows checksum');
   assert.match(html, /Thirty-second flow/, 'website should include a quick demo section');
+  assert.match(html, /What happens to your data/, 'website should include safety copy');
+  assert.match(html, /Start with the symptom/, 'website should include a troubleshooting hub');
+  assert.match(html, /Before you run it/, 'website should include FAQ');
+  assert.match(html, /Transparent beta notes/, 'website should include known limitations');
+  assert.match(html, /assets\/screenshots\/app-home\.png/, 'website should use a real app screenshot asset');
   assert.match(js, /releases\/latest/, 'website should resolve latest release dynamically');
+  assert.match(js, /updateReleaseSummary/, 'website should render latest release highlights');
+  for (const file of ['SAFETY_AND_PRIVACY.md', 'TROUBLESHOOTING.md', 'FAQ.md', 'VERIFY_DOWNLOADS.md']) {
+    assert.ok(fss.existsSync(path.join(__dirname, '..', 'docs', file)), `${file} should exist`);
+  }
 }
 
 async function testApplePhotosImportPlan(tempRoot) {

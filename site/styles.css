@@ -177,6 +177,16 @@ h3 {
   position: relative;
 }
 
+.app-screenshot,
+.wide-shot img {
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(23, 33, 43, 0.1);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
 .app-window {
   overflow: hidden;
   border: 1px solid rgba(23, 33, 43, 0.1);
@@ -278,7 +288,9 @@ h3 {
 .download-grid,
 .features,
 .help-grid,
-.demo-strip {
+.demo-strip,
+.info-grid,
+.faq-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
@@ -287,7 +299,11 @@ h3 {
 .download-card,
 .feature,
 .help-grid article,
-.demo-strip figure {
+.demo-strip figure,
+.info-grid article,
+.faq-grid details,
+.release-card,
+.verify-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -296,7 +312,11 @@ h3 {
 
 .download-card p,
 .feature p,
-.help-grid p {
+.help-grid p,
+.info-grid p,
+.faq-grid p,
+.release-card p,
+.verify-panel p {
   color: var(--muted);
 }
 
@@ -315,6 +335,25 @@ h3 {
   background: var(--soft);
   color: var(--muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.verify-panel {
+  margin-top: 18px;
+}
+
+.command-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.command-grid code {
+  display: block;
+  padding: 12px;
+  border-radius: 8px;
+  background: #111;
+  color: #fff;
   overflow-wrap: anywhere;
 }
 
@@ -351,6 +390,83 @@ h3 {
   color: var(--muted);
 }
 
+.screenshot-section {
+  padding-top: 18px;
+}
+
+.wide-shot {
+  margin: 0;
+}
+
+.wide-shot figcaption {
+  max-width: 720px;
+  margin-top: 12px;
+  color: var(--muted);
+}
+
+.trouble-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trouble-list a {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  text-decoration: none;
+}
+
+.trouble-list span {
+  color: var(--muted);
+}
+
+.faq-grid details {
+  min-height: 92px;
+}
+
+.faq-grid summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.faq-grid p {
+  margin: 12px 0 0;
+}
+
+.release-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.release-card strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 32px;
+}
+
+.limitations-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.limitations-list li {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+}
+
 .install {
   padding-top: 42px;
 }
@@ -380,8 +496,20 @@ h3 {
   .download-grid,
   .features,
   .help-grid,
-  .demo-strip {
+  .demo-strip,
+  .info-grid,
+  .faq-grid {
     grid-template-columns: 1fr;
+  }
+
+  .trouble-list a,
+  .release-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .release-card {
+    display: grid;
   }
 
   .hero-grid {

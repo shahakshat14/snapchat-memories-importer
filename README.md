@@ -104,6 +104,13 @@ Use **Support Bundle** in the app when reporting issues. It exports app/version/
 
 GitHub issue templates are available for import failures, Apple Photos rejected files, Google Photos upload issues, and metadata/date problems.
 
+Helpful docs:
+
+- [Safety and privacy](docs/SAFETY_AND_PRIVACY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [FAQ](docs/FAQ.md)
+- [Verify downloads](docs/VERIFY_DOWNLOADS.md)
+
 ## Updates
 
 For now, download new versions from [GitHub Releases](https://github.com/shahakshat14/snapchat-memories-importer/releases). Full automatic updates are planned after signing and release discipline are stable; see [docs/AUTO_UPDATE_PLAN.md](docs/AUTO_UPDATE_PLAN.md).

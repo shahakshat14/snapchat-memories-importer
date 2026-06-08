@@ -35,6 +35,7 @@ function applyRelease(release) {
   for (const link of document.querySelectorAll('a[href*="/releases/tag/"]')) {
     link.href = release.html_url || FALLBACK_RELEASE.html_url;
   }
+  updateReleaseSummary(release);
 }
 
 function findAsset(release, pattern) {
@@ -54,4 +55,16 @@ function updateDownload(kind, asset) {
 function formatDigest(digest) {
   if (!digest) return 'SHA-256 listed on GitHub release asset';
   return digest.replace(/^sha256:/i, 'SHA-256 ');
+}
+
+function updateReleaseSummary(release) {
+  const summary = document.querySelector('#releaseSummary');
+  if (!summary || !release.body) return;
+  const highlights = release.body
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '))
+    .slice(0, 4)
+    .map((line) => line.slice(2).replace(/`/g, ''));
+  if (highlights.length) summary.textContent = highlights.join(' ');
 }
