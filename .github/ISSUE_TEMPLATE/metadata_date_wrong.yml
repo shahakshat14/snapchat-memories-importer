@@ -1,0 +1,26 @@
+name: Metadata or date looks wrong
+description: Report wrong dates, missing dates, GPS mismatch, or filename date fallback issues.
+title: "Metadata/date issue: "
+labels: ["bug", "metadata"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version
+  - type: textarea
+    id: expected
+    attributes:
+      label: What date or metadata did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What did the preview or destination show?
+    validations:
+      required: true
+  - type: textarea
+    id: inspector
+    attributes:
+      label: Metadata inspector row
+      description: Paste the before/after metadata inspector text for one affected file. Avoid private media.

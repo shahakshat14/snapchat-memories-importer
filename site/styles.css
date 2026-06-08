@@ -277,7 +277,8 @@ h3 {
 
 .download-grid,
 .features,
-.help-grid {
+.help-grid,
+.demo-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
@@ -285,7 +286,8 @@ h3 {
 
 .download-card,
 .feature,
-.help-grid article {
+.help-grid article,
+.demo-strip figure {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -305,9 +307,48 @@ h3 {
   font-weight: 700;
 }
 
+.checksum {
+  display: block;
+  margin-top: 16px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .features {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   padding-top: 18px;
+}
+
+.demo {
+  padding-top: 18px;
+}
+
+.demo-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.demo-strip figure {
+  margin: 0;
+}
+
+.demo-strip span {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 16px;
+  border-radius: 16px;
+  background: var(--yellow);
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.demo-strip figcaption {
+  color: var(--muted);
 }
 
 .install {
@@ -338,7 +379,8 @@ h3 {
   .hero-grid,
   .download-grid,
   .features,
-  .help-grid {
+  .help-grid,
+  .demo-strip {
     grid-template-columns: 1fr;
   }
 

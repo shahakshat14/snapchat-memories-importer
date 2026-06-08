@@ -6,6 +6,7 @@
     <meta name="description" content="Import Snapchat Memories into Apple Photos, Google Photos, or a portable EXIF ZIP.">
     <title>Snapchat Memories Importer</title>
     <link rel="stylesheet" href="styles.css">
+    <script defer src="app.js"></script>
   </head>
   <body>
     <header class="hero">
@@ -27,10 +28,10 @@
           <h1>Bring Snapchat Memories back into your real photo library.</h1>
           <p class="lede">Merge Snapchat export metadata into your photos and videos, preview everything first, then export to Apple Photos, Google Photos, or a clean EXIF ZIP.</p>
           <div class="hero-actions">
-            <a class="button primary" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-0.1.0.dmg">Download for Mac</a>
-            <a class="button secondary" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-Setup-0.1.0.exe">Download for Windows</a>
+            <a class="button primary" data-download="mac" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-0.1.0.dmg">Download for Mac</a>
+            <a class="button secondary" data-download="windows" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-Setup-0.1.0.exe">Download for Windows</a>
           </div>
-          <p class="fineprint">Mac and Windows builds are free beta downloads from GitHub Releases.</p>
+          <p class="fineprint">Latest release: <span data-version>v0.1.0</span>. Mac and Windows builds are free beta downloads from GitHub Releases.</p>
         </div>
 
         <div class="product-shot" aria-label="Product workflow preview">
@@ -84,15 +85,42 @@
           <article class="download-card">
             <h3>macOS</h3>
             <p>Universal DMG for Apple Silicon and Intel Macs. Requires macOS 12 Monterey or newer.</p>
-            <a class="button primary" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-0.1.0.dmg">Download DMG</a>
+            <a class="button primary" data-download="mac" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-0.1.0.dmg">Download DMG</a>
             <a class="guide-link" href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/MAC_INSTALL.md">Mac install guide</a>
+            <code class="checksum" data-checksum="mac">SHA-256 e3c1e6e055209e8dcb058168e13ca027089dafdeb6e83444e3e13f5cfc021e82</code>
           </article>
           <article class="download-card">
             <h3>Windows</h3>
             <p>Installer for Windows 10 and Windows 11. SmartScreen may warn because this is an unsigned free beta.</p>
-            <a class="button primary" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-Setup-0.1.0.exe">Download EXE</a>
+            <a class="button primary" data-download="windows" href="https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-Setup-0.1.0.exe">Download EXE</a>
             <a class="guide-link" href="https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/WINDOWS_INSTALL.md">Windows install guide</a>
+            <code class="checksum" data-checksum="windows">SHA-256 b5bfe7f81c8cde628c5df1c5347ded2bfe302322b7c285da1005109afbe0a342</code>
           </article>
+        </div>
+      </section>
+
+      <section class="section demo" id="demo">
+        <div class="section-heading">
+          <p class="eyebrow">Demo</p>
+          <h2>Thirty-second flow</h2>
+        </div>
+        <div class="demo-strip" aria-label="Snapchat Memories Importer workflow demo">
+          <figure>
+            <span>1</span>
+            <figcaption>Select all mydata zip parts.</figcaption>
+          </figure>
+          <figure>
+            <span>25</span>
+            <figcaption>Run Test 25 and verify dates.</figcaption>
+          </figure>
+          <figure>
+            <span>5812</span>
+            <figcaption>Prepare the full preview.</figcaption>
+          </figure>
+          <figure>
+            <span>ZIP</span>
+            <figcaption>Export or send to Photos.</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -125,6 +153,14 @@
             <h3>Windows SmartScreen</h3>
             <p>If Windows says it protected your PC, click More info, confirm the app name, then click Run anyway.</p>
           </article>
+          <article>
+            <h3>Google Photos Login</h3>
+            <p>Direct Google upload needs the app OAuth client bundled into the build. ZIP export and Apple Photos still work without Google login.</p>
+          </article>
+          <article>
+            <h3>Updates</h3>
+            <p>Use the GitHub Releases page for new versions until automatic updates are enabled after signing and release discipline are locked.</p>
+          </article>
         </div>
       </section>
     </main>
@@ -132,6 +168,7 @@
     <footer class="footer">
       <span>Snapchat Memories Importer</span>
       <a href="https://github.com/shahakshat14/snapchat-memories-importer/releases/tag/v0.1.0">Release notes</a>
+      <a href="https://github.com/shahakshat14/snapchat-memories-importer/issues/new/choose">Get support</a>
       <a href="https://github.com/shahakshat14/snapchat-memories-importer">Source on GitHub</a>
     </footer>
   </body>

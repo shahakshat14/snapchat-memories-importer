@@ -40,10 +40,12 @@ async function prepareMergedMedia({ extractedDir, mergedDir, onProgress = () => 
 
 async function verifyMergedMedia(media, sampleSize = 25) {
   const sample = [];
+  const metadataComparisons = [];
   const issueFiles = [];
   const byYear = {};
   const byMonth = {};
   const timestampGroups = new Map();
+  const hashGroups = new Map();
   const matchCounts = {};
   let withDate = 0;
   let withGps = 0;
@@ -61,6 +63,20 @@ async function verifyMergedMedia(media, sampleSize = 25) {
       missingFiles += 1;
       issueFiles.push(issueRecord(item, 'missing-file', 'Merged file is missing from disk.'));
       continue;
+    }
+    const stats = await fs.stat(item.mergedPath).catch(() => null);
+    const fileHash = await sha256File(item.mergedPath).catch(() => null);
+    if (stats && fileHash) {
+      if (!hashGroups.has(fileHash)) hashGroups.set(fileHash, []);
+      hashGroups.get(fileHash).push({
+        fileName: path.basename(item.mergedPath),
+        path: item.mergedPath,
+        size: stats.size,
+        source: item.source,
+        matchedBy: item.matchedBy,
+        dateSource: item.dateSource || null,
+        takenAt: item.takenAt instanceof Date && !Number.isNaN(item.takenAt.getTime()) ? item.takenAt.toISOString() : null
+      });
     }
 
     let tags;
@@ -98,15 +114,19 @@ async function verifyMergedMedia(media, sampleSize = 25) {
     if (hasGps) withGps += 1;
 
     if (sample.length < sampleSize) {
+      const originalTags = await readOriginalMetadataSample(item);
+      const comparison = metadataComparisonRecord(item, tags, originalTags);
       sample.push({
         fileName: path.basename(item.mergedPath),
         source: item.source,
         matchedBy: item.matchedBy,
+        dateSource: item.dateSource || null,
         date: tags.DateTimeOriginal?.rawValue || tags.DateCreated?.rawValue || null,
         latitude: Number.isFinite(Number(tags.GPSLatitude)) ? Number(tags.GPSLatitude) : null,
         longitude: Number.isFinite(Number(tags.GPSLongitude)) ? Number(tags.GPSLongitude) : null,
         path: item.mergedPath
       });
+      metadataComparisons.push(comparison);
     }
   }
 
@@ -114,6 +134,29 @@ async function verifyMergedMedia(media, sampleSize = 25) {
     .filter(([, files]) => files.length > 1)
     .map(([timestamp, files]) => ({ timestamp, count: files.length, files: files.slice(0, 10) }))
     .sort((left, right) => right.count - left.count || left.timestamp.localeCompare(right.timestamp));
+  const duplicateFileGroups = [...hashGroups.entries()]
+    .filter(([, files]) => files.length > 1)
+    .map(([sha256, files], index) => {
+      const sorted = files
+        .slice()
+        .sort((left, right) => (left.takenAt || '').localeCompare(right.takenAt || '') || left.fileName.localeCompare(right.fileName));
+      const [keeper, ...duplicates] = sorted;
+      return {
+        id: `${sha256.slice(0, 12)}-${index + 1}`,
+        sha256,
+        count: sorted.length,
+        duplicateCount: duplicates.length,
+        size: sorted[0]?.size || 0,
+        totalReclaimableBytes: duplicates.reduce((total, item) => total + (item.size || 0), 0),
+        mediaTypes: [...new Set(sorted.map((item) => mediaTypeFromExtension(item.fileName)).filter(Boolean))],
+        recommendation: duplicates.length
+          ? `Keep ${sorted[0]?.fileName || 'the first file'} and move ${duplicates.length} byte-identical duplicate${duplicates.length === 1 ? '' : 's'} to Trash after review.`
+          : 'No removable duplicate candidate.',
+        keeper,
+        duplicates
+      };
+    })
+    .sort((left, right) => right.duplicateCount - left.duplicateCount || left.keeper.fileName.localeCompare(right.keeper.fileName));
 
   return {
     total: media.length,
@@ -130,17 +173,93 @@ async function verifyMergedMedia(media, sampleSize = 25) {
       byMonth,
       duplicateTimestamps
     },
+    duplicateFileGroups,
+    duplicateFiles: duplicateFileGroups.reduce((total, group) => total + group.duplicateCount, 0),
     issueFiles,
     warnings,
-    sample
+    sample,
+    metadataComparisons
   };
+}
+
+async function readOriginalMetadataSample(item) {
+  if (!item?.file || !fss.existsSync(item.file)) return null;
+  if (item.mergedPath && path.resolve(item.file) === path.resolve(item.mergedPath)) return null;
+  try {
+    return await exiftool.read(item.file);
+  } catch {
+    return null;
+  }
+}
+
+function metadataComparisonRecord(item, mergedTags, originalTags) {
+  const snapchatDate = item.takenAt instanceof Date && !Number.isNaN(item.takenAt.getTime()) ? item.takenAt : null;
+  const mergedDateValue = mergedTags.DateTimeOriginal?.rawValue || mergedTags.DateCreated?.rawValue || mergedTags.CreateDate?.rawValue || null;
+  const mergedDate = parseExifDateValue(mergedDateValue);
+  const originalDateValue = originalTags?.DateTimeOriginal?.rawValue || originalTags?.DateCreated?.rawValue || originalTags?.CreateDate?.rawValue || null;
+  const originalDate = parseExifDateValue(originalDateValue);
+  const snapchatLatitude = Number.isFinite(item.latitude) ? item.latitude : null;
+  const snapchatLongitude = Number.isFinite(item.longitude) ? item.longitude : null;
+  const mergedLatitude = Number.isFinite(Number(mergedTags.GPSLatitude)) ? Number(mergedTags.GPSLatitude) : null;
+  const mergedLongitude = Number.isFinite(Number(mergedTags.GPSLongitude)) ? Number(mergedTags.GPSLongitude) : null;
+  const originalLatitude = Number.isFinite(Number(originalTags?.GPSLatitude)) ? Number(originalTags.GPSLatitude) : null;
+  const originalLongitude = Number.isFinite(Number(originalTags?.GPSLongitude)) ? Number(originalTags.GPSLongitude) : null;
+
+  return {
+    fileName: item?.mergedPath ? path.basename(item.mergedPath) : item?.file ? path.basename(item.file) : 'Unknown file',
+    originalFileName: item?.file ? path.basename(item.file) : null,
+    path: item?.mergedPath || null,
+    source: item?.source || null,
+    matchedBy: item?.matchedBy || null,
+    dateSource: item?.dateSource || null,
+    snapchat: {
+      date: snapchatDate ? snapchatDate.toISOString() : null,
+      latitude: snapchatLatitude,
+      longitude: snapchatLongitude,
+      sourceFile: item?.metadata?._sourceFile || null
+    },
+    originalEmbedded: {
+      date: originalDate ? originalDate.toISOString() : originalDateValue || null,
+      latitude: originalLatitude,
+      longitude: originalLongitude
+    },
+    mergedEmbedded: {
+      date: mergedDate ? mergedDate.toISOString() : mergedDateValue || null,
+      latitude: mergedLatitude,
+      longitude: mergedLongitude
+    },
+    status: {
+      date: compareDates(snapchatDate, mergedDate),
+      gps: compareGps(snapchatLatitude, snapchatLongitude, mergedLatitude, mergedLongitude)
+    }
+  };
+}
+
+function compareDates(expected, actual) {
+  if (!expected && !actual) return 'missing';
+  if (!expected) return 'added-from-file';
+  if (!actual) return 'missing-after-merge';
+  return Math.abs(expected.getTime() - actual.getTime()) <= 1000 ? 'matched' : 'changed';
+}
+
+function compareGps(expectedLatitude, expectedLongitude, actualLatitude, actualLongitude) {
+  const hasExpected = Number.isFinite(expectedLatitude) && Number.isFinite(expectedLongitude);
+  const hasActual = Number.isFinite(actualLatitude) && Number.isFinite(actualLongitude);
+  if (!hasExpected && !hasActual) return 'missing';
+  if (!hasExpected) return 'added-from-file';
+  if (!hasActual) return 'missing-after-merge';
+  return Math.abs(expectedLatitude - actualLatitude) <= 0.00001 && Math.abs(expectedLongitude - actualLongitude) <= 0.00001 ? 'matched' : 'changed';
 }
 
 async function createReviewArtifacts({ mergedDir, media, verification, skippedDownloadLinks = [], exifWriteWarnings = [], mediaRepairResults = [] }) {
   const reviewDir = path.join(mergedDir, '_Needs Review');
+  const reviewReportPath = path.join(reviewDir, 'review-report.json');
+  const summaryPath = path.join(mergedDir, 'Import Summary.html');
   const damagedDir = path.join(reviewDir, 'Damaged Videos');
   const missingDatesDir = path.join(reviewDir, 'Missing Dates');
   const skippedDownloadsDir = path.join(reviewDir, 'Skipped Downloads');
+  const duplicatesDir = path.join(reviewDir, 'Duplicates');
+  const duplicateReportPath = path.join(duplicatesDir, 'duplicate-files.json');
   const copied = [];
 
   const damagedPaths = new Set([
@@ -172,30 +291,77 @@ async function createReviewArtifacts({ mergedDir, media, verification, skippedDo
     await fs.mkdir(skippedDownloadsDir, { recursive: true });
     await fs.writeFile(path.join(skippedDownloadsDir, 'skipped-downloads.json'), JSON.stringify(skippedDownloadLinks, null, 2));
   }
+  if (verification.duplicateFileGroups?.length) {
+    await fs.mkdir(duplicatesDir, { recursive: true });
+    await fs.writeFile(duplicateReportPath, JSON.stringify(verification.duplicateFileGroups, null, 2));
+  }
 
   const report = {
     createdAt: new Date().toISOString(),
     reviewDir,
+    reviewReportPath,
+    summaryPath,
+    duplicateReportPath: verification.duplicateFileGroups?.length ? duplicateReportPath : null,
     copied,
     counts: {
       damagedVideos: copied.filter((item) => item.type === 'damaged-video').length,
       missingDates: copied.filter((item) => item.type === 'missing-date').length,
       skippedDownloads: skippedDownloadLinks.length,
-      exifWarnings: exifWriteWarnings.length
+      exifWarnings: exifWriteWarnings.length,
+      duplicateGroups: verification.duplicateFileGroups?.length || 0,
+      duplicateFiles: verification.duplicateFiles || 0
     },
     issues: verification.issueFiles || [],
+    dateRepairSuggestions: buildDateRepairSuggestions(media, verification.issueFiles || []),
     skippedDownloadLinks,
     exifWriteWarnings,
     mediaRepairResults
   };
 
-  if (copied.length || skippedDownloadLinks.length || exifWriteWarnings.length || (verification.issueFiles || []).length) {
+  if (copied.length || skippedDownloadLinks.length || exifWriteWarnings.length || (verification.issueFiles || []).length || verification.duplicateFileGroups?.length) {
     await fs.mkdir(reviewDir, { recursive: true });
-    await fs.writeFile(path.join(reviewDir, 'review-report.json'), JSON.stringify(report, null, 2));
+    await fs.writeFile(reviewReportPath, JSON.stringify(report, null, 2));
   }
 
-  await fs.writeFile(path.join(mergedDir, 'Import Summary.html'), renderImportSummaryHtml({ media, verification, report }));
+  await fs.writeFile(summaryPath, renderImportSummaryHtml({ media, verification, report }));
   return report;
+}
+
+function buildDateRepairSuggestions(media, issueFiles) {
+  const byName = new Map(media.map((item) => [path.basename(item.mergedPath || item.file || ''), item]));
+  const dated = media
+    .filter((item) => item.takenAt instanceof Date && !Number.isNaN(item.takenAt.getTime()))
+    .sort((left, right) => left.takenAt - right.takenAt);
+  return issueFiles
+    .filter((item) => item.type === 'missing-date')
+    .slice(0, 100)
+    .map((issue) => {
+      const source = byName.get(issue.fileName) || {};
+      const filenameDate = source.mergedPath ? findDatetimeInFilename(path.basename(source.mergedPath)) : null;
+      const neighbors = nearestDatedNeighbors(dated, source);
+      return {
+        fileName: issue.fileName,
+        path: issue.path,
+        suggestedDate: filenameDate ? filenameDate.toISOString() : neighbors[0]?.takenAt || null,
+        confidence: filenameDate ? 'high' : neighbors.length ? 'low' : 'none',
+        reason: filenameDate ? 'Recovered from filename.' : neighbors.length ? 'Estimated from nearby dated memories.' : 'No local date clue found.',
+        neighbors
+      };
+    });
+}
+
+function nearestDatedNeighbors(dated, source) {
+  if (!source?.mergedPath) return [];
+  const sourceName = path.basename(source.mergedPath);
+  return dated
+    .map((item) => ({
+      fileName: path.basename(item.mergedPath || item.file || ''),
+      takenAt: item.takenAt.toISOString(),
+      distance: Math.abs((item.file || '').localeCompare(sourceName))
+    }))
+    .sort((left, right) => left.distance - right.distance)
+    .slice(0, 3)
+    .map(({ distance: _distance, ...item }) => item);
 }
 
 async function materializeMedia(directMatches, metadataEntries, mergedDir, onProgress = () => {}) {
@@ -409,13 +575,86 @@ function matchSnapchatMemoriesByDate(matches, metadataEntries) {
 }
 
 function metadataMatchFromEntry(file, metadata, matchedBy) {
+  const metadataDate = metadata ? findDatetime(metadata) : null;
+  const filenameDate = metadataDate ? null : findDatetimeInFilename(file);
+  const dateRecovery = metadataDate
+    ? { source: 'metadata', confidence: 1, reason: 'Snapchat metadata date matched this media item.' }
+    : filenameDate
+      ? { source: 'filename', confidence: 0.82, reason: 'No Snapchat date was present, so the date was recovered from the media filename.' }
+      : { source: null, confidence: 0, reason: 'No reliable date source was found.' };
   return {
     file,
     metadata,
     matchedBy,
-    takenAt: metadata ? findDatetime(metadata) : null,
+    takenAt: metadataDate || filenameDate,
+    dateSource: dateRecovery.source,
+    dateConfidence: dateRecovery.confidence,
+    dateRecovery,
     latitude: metadata ? findFloat(metadata, LAT_KEYS) : null,
     longitude: metadata ? findFloat(metadata, LON_KEYS) : null
+  };
+}
+
+function buildAlbumPlan(media, { maxPreviewItems = 8 } = {}) {
+  const groups = new Map();
+  for (const item of media || []) {
+    if (!(item.takenAt instanceof Date) || Number.isNaN(item.takenAt.getTime())) continue;
+    const key = `${item.takenAt.getUTCFullYear()}-${String(item.takenAt.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        title: `Snapchat Memories ${key}`,
+        year: item.takenAt.getUTCFullYear(),
+        month: item.takenAt.getUTCMonth() + 1,
+        count: 0,
+        files: []
+      });
+    }
+    const group = groups.get(key);
+    group.count += 1;
+    if (group.files.length < maxPreviewItems) group.files.push(path.basename(item.mergedPath || item.file || 'memory'));
+  }
+  return [...groups.values()].sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function calculateRiskScore({ verification = {}, skippedDownloadLinks = [], exifWriteWarnings = [], mediaRepairResults = [] }) {
+  const total = Math.max(verification.total || 0, 1);
+  const missingDates = (verification.issueFiles || []).filter((item) => item?.type === 'missing-date').length;
+  const unreadable = verification.unreadableFiles || 0;
+  const missingFiles = verification.missingFiles || 0;
+  const duplicates = verification.duplicateFiles || 0;
+  const damaged = mediaRepairResults.filter((item) => item.repaired === false).length;
+  const dateCoverage = (verification.withDate || 0) / total;
+  const gpsCoverage = (verification.withGps || 0) / total;
+  const filenameRecovered = (verification.metadataComparisons || []).filter((item) => item.dateSource === 'filename').length;
+
+  const penalties = [
+    { label: 'Missing files', value: missingFiles, weight: 26 },
+    { label: 'Unreadable files', value: unreadable, weight: 22 },
+    { label: 'Missing dates', value: missingDates, weight: 18 },
+    { label: 'Skipped Snapchat links', value: skippedDownloadLinks.length, weight: 12 },
+    { label: 'EXIF warnings', value: exifWriteWarnings.length + (verification.warnings?.length || 0), weight: 12 },
+    { label: 'Damaged videos', value: damaged, weight: 10 },
+    { label: 'Exact duplicates', value: duplicates, weight: 8 }
+  ];
+
+  const activeFactors = penalties.filter((item) => item.value > 0);
+  let score = 100;
+  for (const item of penalties) {
+    score -= Math.min(item.weight, (item.value / total) * item.weight * 8);
+  }
+  score -= Math.max(0, 1 - dateCoverage) * 30;
+  score -= Math.max(0, 0.5 - gpsCoverage) * 10;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  if (activeFactors.length) score = Math.min(score, 98);
+
+  return {
+    score,
+    level: score >= 90 ? 'excellent' : score >= 80 ? 'good' : score >= 55 ? 'review' : 'blocked',
+    dateCoverage: Math.round(dateCoverage * 100),
+    gpsCoverage: Math.round(gpsCoverage * 100),
+    filenameRecovered,
+    factors: activeFactors
   };
 }
 
@@ -589,6 +828,12 @@ function renderImportSummaryHtml({ media, verification, report }) {
   const duplicateRows = (timeline.duplicateTimestamps || []).slice(0, 100)
     .map((item) => `<tr><td>${escapeHtml(item.timestamp)}</td><td>${item.count}</td><td>${escapeHtml(item.files.join(', '))}</td></tr>`)
     .join('');
+  const duplicateFileRows = (verification.duplicateFileGroups || []).slice(0, 100)
+    .map((item) => `<tr><td>${escapeHtml(item.keeper.fileName)}</td><td>${item.duplicateCount}</td><td>${escapeHtml(item.duplicates.map((file) => file.fileName).join(', '))}</td></tr>`)
+    .join('');
+  const metadataRows = (verification.metadataComparisons || []).slice(0, 50)
+    .map((item) => `<tr><td>${escapeHtml(item.fileName)}</td><td>${escapeHtml(item.snapchat?.date || 'Missing')}</td><td>${escapeHtml(item.mergedEmbedded?.date || 'Missing')}</td><td>${escapeHtml(item.status?.date || 'unknown')}</td><td>${escapeHtml(formatSummaryGps(item.snapchat?.latitude, item.snapchat?.longitude))}</td><td>${escapeHtml(formatSummaryGps(item.mergedEmbedded?.latitude, item.mergedEmbedded?.longitude))}</td><td>${escapeHtml(item.status?.gps || 'unknown')}</td></tr>`)
+    .join('');
 
   return `<!doctype html>
 <html lang="en">
@@ -616,6 +861,7 @@ function renderImportSummaryHtml({ media, verification, report }) {
     <div class="card"><span class="value">${verification.issueFiles?.length || 0}</span>Review issues</div>
     <div class="card"><span class="value">${report.counts?.damagedVideos || 0}</span>Damaged copies</div>
     <div class="card"><span class="value">${timeline.duplicateTimestamps?.length || 0}</span>Duplicate timestamps</div>
+    <div class="card"><span class="value">${verification.duplicateFiles || 0}</span>Exact duplicate files</div>
   </div>
   <h2>Date Range</h2>
   <p>${escapeHtml(timeline.oldest || 'Unknown')} to ${escapeHtml(timeline.newest || 'Unknown')}</p>
@@ -623,11 +869,20 @@ function renderImportSummaryHtml({ media, verification, report }) {
   <table><thead><tr><th>Year</th><th>Files</th></tr></thead><tbody>${yearRows || '<tr><td colspan="2">No dated files</td></tr>'}</tbody></table>
   <h2>Duplicate Timestamps</h2>
   <table><thead><tr><th>Timestamp</th><th>Count</th><th>Sample files</th></tr></thead><tbody>${duplicateRows || '<tr><td colspan="3">No duplicate timestamps detected</td></tr>'}</tbody></table>
+  <h2>Exact Duplicate Files</h2>
+  <table><thead><tr><th>Kept file</th><th>Duplicate candidates</th><th>Files safe to remove after review</th></tr></thead><tbody>${duplicateFileRows || '<tr><td colspan="3">No exact duplicate files detected</td></tr>'}</tbody></table>
+  <h2>Metadata Inspector Sample</h2>
+  <table><thead><tr><th>File</th><th>Snapchat date</th><th>Merged date</th><th>Date result</th><th>Snapchat GPS</th><th>Merged GPS</th><th>GPS result</th></tr></thead><tbody>${metadataRows || '<tr><td colspan="7">No metadata sample available</td></tr>'}</tbody></table>
   <h2>Needs Review</h2>
   <table><thead><tr><th>Type</th><th>File</th><th>Reason</th></tr></thead><tbody>${issueRows || '<tr><td colspan="3">No review issues detected</td></tr>'}</tbody></table>
   <p>Total copied media checked: ${media.length}</p>
 </body>
 </html>`;
+}
+
+function formatSummaryGps(latitude, longitude) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return 'Missing';
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
 function escapeHtml(value) {
@@ -766,6 +1021,51 @@ function findDatetime(entry) {
     if (!best || score < best.score) best = { score, parsed };
   }
   return best?.parsed || null;
+}
+
+function findDatetimeInFilename(file) {
+  const name = path.basename(String(file || ''));
+  const patterns = [
+    /(\d{4})[-_.](\d{2})[-_.](\d{2})[ T_-]?(\d{2})[-_.:]?(\d{2})[-_.:]?(\d{2})/,
+    /(\d{4})[-_.](\d{2})[-_.](\d{2})/,
+    /(\d{8})[_-]?(\d{6})/,
+    /(\d{8})/
+  ];
+
+  for (const pattern of patterns) {
+    const match = name.match(pattern);
+    if (!match) continue;
+    const parsed = parseFilenameDateMatch(match);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function parseFilenameDateMatch(match) {
+  let year;
+  let month;
+  let day;
+  let hour = '00';
+  let minute = '00';
+  let second = '00';
+
+  if (match[1]?.length === 8) {
+    year = match[1].slice(0, 4);
+    month = match[1].slice(4, 6);
+    day = match[1].slice(6, 8);
+    if (match[2]?.length === 6) {
+      hour = match[2].slice(0, 2);
+      minute = match[2].slice(2, 4);
+      second = match[2].slice(4, 6);
+    }
+  } else {
+    [, year, month, day, hour = '00', minute = '00', second = '00'] = match;
+  }
+
+  const parsed = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.getUTCFullYear() < 2000 || parsed.getUTCFullYear() > new Date().getUTCFullYear() + 1) return null;
+  return parsed;
 }
 
 function parseDatetime(value) {
@@ -932,6 +1232,8 @@ module.exports = {
   prepareMergedMedia,
   verifyMergedMedia,
   createReviewArtifacts,
+  calculateRiskScore,
+  buildAlbumPlan,
   materializeMedia,
   loadMetadataEntries,
   buildMatches,

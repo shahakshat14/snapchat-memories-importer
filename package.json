@@ -9,9 +9,15 @@
   "scripts": {
     "start": "electron .",
     "qa": "node tests/qa-importer.js",
+    "prepare:google-auth": "node scripts/write-google-oauth-config.js",
+    "icons:generate": "node scripts/create-icons.js",
+    "signing:doctor": "node scripts/signing-doctor.js",
     "dist": "node scripts/build-mac-dmg.js",
     "dist:mac": "node scripts/build-mac-dmg.js",
+    "dist:mac:signed": "node scripts/signing-doctor.js --mac && node scripts/build-mac-dmg.js",
+    "notarize:mac": "node scripts/notarize-mac-dmg.js",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "dist:win:signed": "node scripts/signing-doctor.js --win && electron-builder --win nsis --x64 --publish never",
     "install:mac": "bash scripts/install-local-mac.sh",
     "update:mac": "npm run dist:mac && npm run install:mac",
     "pack": "electron-builder --mac dir --publish never",
@@ -34,6 +40,7 @@
     "productName": "Snapchat Memories Importer",
     "mac": {
       "category": "public.app-category.photography",
+      "icon": "build/icon.icns",
       "identity": null,
       "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg",
       "target": [
@@ -44,6 +51,7 @@
       "artifactName": "Snapchat-Memories-Importer-${version}.${ext}"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",

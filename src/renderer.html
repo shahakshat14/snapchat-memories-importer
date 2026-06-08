@@ -7,121 +7,259 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="panel">
-        <div class="title-row">
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="app-icon">S</span>
           <div>
-            <p class="eyebrow">Local Importer</p>
-            <h1>Snapchat Memories Importer</h1>
+            <p>Snapchat Memories Importer</p>
+            <h1>Move memories without losing dates.</h1>
           </div>
-          <div class="status-pill" id="statusPill">Ready</div>
         </div>
-
-        <div class="steps">
-          <button class="step" id="zipButton">
-            <span class="step-index">1</span>
-            <span>
-              <strong>Choose Snapchat exports</strong>
-              <small id="zipPath">No zip files or folder selected</small>
-            </span>
-          </button>
-
-          <button class="step" id="signInButton">
-            <span class="step-index">2</span>
-            <span>
-              <strong>Sign in with Google Photos</strong>
-              <small id="accountLabel">Not connected</small>
-            </span>
-          </button>
+        <div class="top-actions">
+          <button class="secondary compact" id="resumeButton">Resume</button>
+          <button class="secondary compact" id="cancelButton">Cancel</button>
         </div>
+      </header>
 
-        <div class="progress-wrap">
-          <div class="progress-header">
-            <span id="stageLabel">Waiting</span>
-            <span id="percentLabel">0%</span>
-          </div>
-          <div class="progress-track">
-            <div class="progress-bar" id="progressBar"></div>
-          </div>
-          <p id="message">Pick your Snapchat My Data zip files, or a folder containing them, to begin.</p>
+      <section class="status-strip">
+        <span class="status-pill" id="statusPill">Ready</span>
+        <div class="status-copy">
+          <strong id="stageLabel">Waiting</strong>
+          <p id="message">Choose your Snapchat My Data zip files or the folder containing them.</p>
         </div>
+        <span id="percentLabel">0%</span>
+        <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+      </section>
 
-        <section class="activity">
-          <div class="activity-head">
-            <h2>Activity</h2>
-            <button class="secondary compact" id="clearLogButton">Clear</button>
+      <section class="flow" aria-label="Import flow">
+        <article class="flow-card is-active" id="workflowSelect">
+          <span>1</span>
+          <div>
+            <h2>Select export</h2>
+            <p id="zipPath">No Snapchat export selected yet.</p>
           </div>
-          <div class="terminal" id="activityLog" role="log" aria-live="polite"></div>
-        </section>
+          <button class="primary" id="zipButton">Choose Files</button>
+        </article>
+        <article class="flow-card" id="workflowPreview">
+          <span>2</span>
+          <div>
+            <h2>Preview metadata</h2>
+            <p>Extract, repair, merge EXIF, and check dates before anything uploads.</p>
+          </div>
+          <div class="button-pair">
+            <button class="secondary" id="preflightButton">Preflight</button>
+            <button class="secondary" id="sampleButton">Test 25</button>
+            <button class="primary" id="prepareButton">Prepare Preview</button>
+          </div>
+        </article>
+        <article class="flow-card" id="workflowSend">
+          <span>3</span>
+          <div>
+            <h2>Choose destination</h2>
+            <p>Send to Apple Photos, Google Photos, or create a clean ZIP.</p>
+          </div>
+          <div class="destination-actions">
+            <button class="primary" id="applePhotosButton">Apple Photos</button>
+            <button class="secondary" id="zipExportButton">ZIP</button>
+            <button class="secondary" id="uploadButton">Google</button>
+          </div>
+        </article>
+      </section>
 
-        <section class="preview" id="previewPanel" hidden>
-          <div class="preview-head">
-            <div>
-              <h2>Preview</h2>
-              <p id="previewLocation"></p>
-            </div>
-            <button class="secondary compact" id="openMergedButton">Open Folder</button>
-          </div>
-          <div class="metrics">
-            <div><strong id="totalMetric">0</strong><small>Merged</small></div>
-            <div><strong id="dateMetric">0</strong><small>With Date</small></div>
-            <div><strong id="gpsMetric">0</strong><small>With GPS</small></div>
-            <div><strong id="missingMetric">0</strong><small>Missing</small></div>
-            <div><strong id="skippedMetric">0</strong><small>Skipped Links</small></div>
-            <div><strong id="repairMetric">0</strong><small>Repaired</small></div>
-            <div><strong id="warningMetric">0</strong><small>Warnings</small></div>
-            <div><strong id="issueMetric">0</strong><small>Needs Review</small></div>
-          </div>
-          <div class="audit-grid">
-            <section class="audit-card">
-              <h3>Timeline</h3>
-              <dl>
-                <div><dt>Oldest</dt><dd id="oldestDate">Unknown</dd></div>
-                <div><dt>Newest</dt><dd id="newestDate">Unknown</dd></div>
-                <div><dt>Duplicate timestamps</dt><dd id="duplicateMetric">0</dd></div>
-              </dl>
-            </section>
-            <section class="audit-card">
-              <h3>Coverage</h3>
-              <dl>
-                <div><dt>Date coverage</dt><dd id="dateCoverageMetric">0%</dd></div>
-                <div><dt>GPS coverage</dt><dd id="gpsCoverageMetric">0%</dd></div>
-                <div><dt>Top match</dt><dd id="topMatchMetric">Unknown</dd></div>
-              </dl>
-            </section>
-          </div>
-          <div class="timeline-bars" id="timelineBars"></div>
-          <div class="review-list" id="reviewList" hidden>
-            <h3>Needs Review</h3>
-            <ul id="reviewItems"></ul>
-          </div>
-          <div class="sample-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>File</th>
-                  <th>Source</th>
-                  <th>Date</th>
-                  <th>GPS</th>
-                </tr>
-              </thead>
-              <tbody id="sampleRows"></tbody>
-            </table>
-          </div>
-          <label class="review-check">
-            <input type="checkbox" id="reviewCheckbox" />
-            <span>I reviewed the merged files and metadata preview</span>
-          </label>
-        </section>
+      <section class="review-checkline">
+        <label class="review-check">
+          <input type="checkbox" id="reviewCheckbox" />
+          <span>I reviewed the preview and I am ready to export or upload.</span>
+        </label>
+      </section>
 
-        <div class="actions">
-          <button class="primary" id="prepareButton">Prepare Preview</button>
-          <button class="secondary" id="zipExportButton">Export ZIP</button>
-          <button class="secondary" id="applePhotosButton">Apple Photos</button>
-          <button class="primary" id="uploadButton">Google Photos</button>
-          <button class="secondary" id="cancelButton">Cancel</button>
+      <section class="empty-state" id="emptyState">
+        <h2>Start with Snapchat’s My Data export.</h2>
+        <p>The app works locally first: it finds every <strong>mydata</strong> zip part, merges dates and GPS, then pauses for your review.</p>
+        <div class="trust-grid">
+          <div><strong>Private</strong><span>Processing stays on this Mac until you choose a destination.</span></div>
+          <div><strong>Recoverable</strong><span>Resume and reports help you continue after Photos or network issues.</span></div>
+          <div><strong>Try small</strong><span>Use Test 25 before running a full library.</span></div>
         </div>
       </section>
+
+      <section class="preflight-panel" id="preflightPanel" hidden>
+        <div class="section-title">
+          <h2>Preflight</h2>
+          <span id="preflightSummary">Storage and runtime estimate</span>
+        </div>
+        <div class="preflight-grid" id="preflightGrid"></div>
+      </section>
+
+      <section class="preview" id="previewPanel" hidden>
+        <div class="section-title">
+          <div>
+            <h2>Preview</h2>
+            <p id="previewLocation"></p>
+          </div>
+          <div class="inline-actions">
+            <button class="secondary compact" id="openSummaryButton">Summary</button>
+            <button class="secondary compact" id="openMergedButton">Folder</button>
+          </div>
+        </div>
+
+        <div class="readiness" id="readinessBanner">
+          <div>
+            <strong id="readinessTitle">Preview waiting</strong>
+            <span id="readinessDetail">Prepare a preview to see metadata coverage and review issues.</span>
+          </div>
+          <span class="quality-pill" id="qualityPill">Not checked</span>
+        </div>
+
+        <div class="metrics">
+          <div><strong id="totalMetric">0</strong><small>Merged</small></div>
+          <div><strong id="dateMetric">0</strong><small>With Date</small></div>
+          <div><strong id="gpsMetric">0</strong><small>With GPS</small></div>
+          <div><strong id="missingMetric">0</strong><small>Missing</small></div>
+          <div><strong id="duplicateFileMetric">0</strong><small>Duplicates</small></div>
+          <div><strong id="issueMetric">0</strong><small>Review</small></div>
+        </div>
+
+        <div class="detail-grid">
+          <section>
+            <h3>Confidence</h3>
+            <dl>
+              <div><dt>Score</dt><dd id="riskScoreMetric">--</dd></div>
+              <div><dt>Details</dt><dd id="riskScoreDetail">Waiting for preview</dd></div>
+              <div><dt>Date coverage</dt><dd id="dateCoverageMetric">0%</dd></div>
+              <div><dt>GPS coverage</dt><dd id="gpsCoverageMetric">0%</dd></div>
+              <div><dt>Top match</dt><dd id="topMatchMetric">Unknown</dd></div>
+            </dl>
+          </section>
+          <section>
+            <h3>Timeline</h3>
+            <dl>
+              <div><dt>Oldest</dt><dd id="oldestDate">Unknown</dd></div>
+              <div><dt>Newest</dt><dd id="newestDate">Unknown</dd></div>
+              <div><dt>Duplicate timestamps</dt><dd id="duplicateMetric">0</dd></div>
+              <div><dt>Filename dates</dt><dd id="dateRecoveryMetric">0</dd></div>
+              <div><dt>Albums</dt><dd id="albumPlanMetric">0</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <details class="quiet-details">
+          <summary>More preview detail</summary>
+          <div class="metrics secondary-metrics">
+            <div><strong id="skippedMetric">0</strong><small>Skipped links</small></div>
+            <div><strong id="repairMetric">0</strong><small>Repaired</small></div>
+            <div><strong id="warningMetric">0</strong><small>Warnings</small></div>
+          </div>
+          <p id="albumPlanDetail" class="muted">Monthly Snapchat albums</p>
+          <div class="timeline-bars" id="timelineBars"></div>
+          <div class="album-plan-list" id="albumPlanList"></div>
+          <div class="metadata-inspector">
+            <div class="inspector-head">
+              <div>
+                <h3>Metadata Inspector</h3>
+                <p id="metadataInspectorSummary">Before and after metadata checks appear after preview.</p>
+              </div>
+              <select id="metadataInspectorSelect" aria-label="Choose file for metadata inspection"></select>
+            </div>
+            <div class="metadata-compare" id="metadataInspector"></div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>File</th><th>Source</th><th>Date</th><th>GPS</th></tr>
+            </thead>
+            <tbody id="sampleRows"></tbody>
+          </table>
+        </details>
+      </section>
+
+      <section class="final-report" id="finalReportPanel" hidden>
+        <div class="final-report-head">
+          <div>
+            <h2 id="finalReportTitle">Run complete</h2>
+            <p id="finalReportDetail"></p>
+          </div>
+          <span class="quality-pill" id="finalReportPill">Complete</span>
+        </div>
+        <div class="final-report-grid" id="finalReportMetrics"></div>
+        <div class="final-report-actions">
+          <button class="secondary compact" id="openFinalReportButton">Report</button>
+          <button class="secondary compact" id="openFinalFolderButton">Folder</button>
+          <button class="secondary compact" id="openFinalZipButton" hidden>ZIP</button>
+          <button class="secondary compact" id="cleanupButton">Cleanup</button>
+          <button class="secondary compact" id="diagnosticsButton">Support Bundle</button>
+        </div>
+      </section>
+
+      <details class="run-log">
+        <summary>
+          <span>
+            <strong id="currentActivity">Activity</strong>
+            <small id="currentActivityDetail">Open only when you want technical detail.</small>
+          </span>
+          <span>Show log</span>
+        </summary>
+        <div class="activity-body">
+          <div class="activity-stats">
+            <span id="mergedStat">0 merged</span>
+            <span id="exifStat">0 EXIF writes</span>
+            <span id="downloadStat">0 downloads</span>
+            <span id="attentionStat">0 attention</span>
+          </div>
+          <button class="secondary compact" id="clearLogButton">Clear</button>
+          <div class="terminal" id="activityLog" role="log" aria-live="polite"></div>
+        </div>
+      </details>
+
+      <section class="side-tools">
+        <button class="account-card" id="signInButton">
+          <span class="account-dot">G</span>
+          <span>
+            <strong>Google account</strong>
+            <small id="accountLabel">Login opens after preview approval</small>
+          </span>
+        </button>
+        <label class="album-toggle">
+          <input type="checkbox" id="createAlbumsCheckbox" />
+          <span>Create Google Photos albums</span>
+        </label>
+        <button class="secondary compact" id="releaseReadinessButton">Release Check</button>
+        <div class="help-links">
+          <button class="link-button" id="macHelpButton">Mac install help</button>
+          <button class="link-button" id="windowsHelpButton">Windows install help</button>
+          <button class="link-button" id="updatesButton">Updates</button>
+        </div>
+      </section>
+
+      <section class="review-list" id="reviewList" hidden>
+        <h3>Needs Review</h3>
+        <ul id="reviewItems"></ul>
+      </section>
+      <section class="duplicate-review" id="duplicateReview" hidden>
+        <div class="duplicate-head">
+          <div>
+            <h3>Exact Duplicates</h3>
+            <p id="duplicateSummary"></p>
+          </div>
+          <button class="danger compact" id="deleteDuplicatesButton">Move to Trash</button>
+        </div>
+        <ul id="duplicateItems"></ul>
+      </section>
+      <section class="fix-panel" id="fixProblemsPanel" hidden>
+        <div class="fix-head">
+          <div>
+            <h3>Fix Problems</h3>
+            <p id="fixProblemsSummary"></p>
+          </div>
+          <button class="secondary compact" id="openNeedsReviewButton">Open Review</button>
+        </div>
+        <div class="fix-items" id="fixProblemItems"></div>
+      </section>
+
+      <div hidden>
+        <span id="actionTitle"></span>
+        <span id="actionHint"></span>
+      </div>
     </main>
     <script src="./renderer.js"></script>
   </body>

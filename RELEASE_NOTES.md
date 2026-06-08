@@ -37,6 +37,7 @@ Full guide: https://github.com/shahakshat14/snapchat-memories-importer/blob/main
 - Merge Snapchat Memories metadata into copied photo/video files.
 - Preview metadata before upload or export.
 - Run a small `Test 25` sample before processing the full archive.
+- Export a privacy-conscious Support Bundle when reporting issues.
 - Export a new merged EXIF ZIP.
 - Import into Apple Photos with safer batching and final verification.
 - Upload into Google Photos after browser sign-in.
@@ -45,3 +46,10 @@ Full guide: https://github.com/shahakshat14/snapchat-memories-importer/blob/main
 ## Privacy
 
 Processing happens locally. Google Photos upload only starts after you sign in and choose that destination.
+
+## Checksums
+
+```text
+macOS DMG    SHA-256 e3c1e6e055209e8dcb058168e13ca027089dafdeb6e83444e3e13f5cfc021e82
+Windows EXE  SHA-256 b5bfe7f81c8cde628c5df1c5347ded2bfe302322b7c285da1005109afbe0a342
+```

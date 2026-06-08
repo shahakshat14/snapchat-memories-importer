@@ -20,14 +20,109 @@ async function main() {
     await testZipWithDownloadLinks(tempRoot);
     await testFailedMediaDownloadIsSkipped(tempRoot);
     await testSnapchatMemoryDateFallback(tempRoot);
+    await testFilenameDateFallback(tempRoot);
     await testReadableFilenameCollisions(tempRoot);
+    await testExactDuplicateDetection(tempRoot);
     await testDamagedVideoRepairIsReported(tempRoot);
     await testMultipleMyDataZips(tempRoot);
+    testRiskScoreBoundaries();
+    await testApplePhotosImportPlan(tempRoot);
+    testRendererPublicLaunchControls();
+    testWebsitePublicLaunchControls();
     console.log('QA importer tests passed');
   } finally {
     await exiftool.end();
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+function testRendererPublicLaunchControls() {
+  const html = fss.readFileSync(path.join(__dirname, '..', 'src', 'renderer.html'), 'utf8');
+  const renderer = fss.readFileSync(path.join(__dirname, '..', 'src', 'renderer.js'), 'utf8');
+  assert.match(html, /id="sampleButton"/, 'public flow should expose a small sample test button');
+  assert.match(renderer, /sampleLimit: 25/, 'sample button should prepare a 25-file preview');
+  assert.match(html, /Processing stays on this Mac/, 'first-run trust copy should explain local processing');
+  assert.match(renderer, /lastSessionStatus/, 'renderer should surface resumable session status');
+  assert.match(html, /Support Bundle/, 'public support flow should expose a support bundle button');
+  assert.match(html, /id="macHelpButton"/, 'app should link to Mac install help');
+  assert.match(html, /id="windowsHelpButton"/, 'app should link to Windows install help');
+}
+
+function testWebsitePublicLaunchControls() {
+  const html = fss.readFileSync(path.join(__dirname, '..', 'site', 'index.html'), 'utf8');
+  const js = fss.readFileSync(path.join(__dirname, '..', 'site', 'app.js'), 'utf8');
+  assert.match(html, /data-download="mac"/, 'website should expose Mac download targets');
+  assert.match(html, /data-download="windows"/, 'website should expose Windows download targets');
+  assert.match(html, /data-checksum="mac"/, 'website should show Mac checksum');
+  assert.match(html, /data-checksum="windows"/, 'website should show Windows checksum');
+  assert.match(html, /Thirty-second flow/, 'website should include a quick demo section');
+  assert.match(js, /releases\/latest/, 'website should resolve latest release dynamically');
+}
+
+async function testApplePhotosImportPlan(tempRoot) {
+  const fixture = path.join(tempRoot, 'apple-photos-plan');
+  await fs.mkdir(fixture, { recursive: true });
+  const files = [];
+  for (let index = 0; index < 12; index += 1) {
+    const file = path.join(fixture, `clip-${index + 1}.mp4`);
+    await fs.writeFile(file, Buffer.from([index]));
+    files.push(file);
+  }
+  const largeFile = path.join(fixture, 'large-photo.jpg');
+  await fs.writeFile(largeFile, Buffer.from([1]));
+  await fs.truncate(largeFile, 700 * 1024 * 1024);
+  files.push(largeFile);
+
+  const plan = await mainProcess.buildApplePhotosImportPlan(files);
+  assert.equal(plan.totalFiles, 13, 'Apple Photos plan should include all existing importable files');
+  assert.ok(plan.batches.length >= 3, 'Apple Photos plan should split video-heavy and oversized imports');
+  assert.ok(plan.batches.every((batch) => batch.files.length <= 5), 'Apple Photos batches should stay tiny to avoid Photos rejection loops');
+  assert.ok(plan.batches.every((batch) => batch.videoCount <= 5), 'Apple Photos batches should cap videos per handoff');
+  assert.ok(plan.batches.every((batch) => batch.files.length === 1 || batch.bytes <= 650 * 1024 * 1024), 'Apple Photos batches should cap mixed batch size');
+
+  const script = mainProcess.buildPhotosImportScript(files.slice(0, 2));
+  assert.match(script, /with timeout of 3600 seconds/, 'Apple Photos script should allow long imports');
+  assert.match(script, /skip check duplicates yes/, 'Apple Photos should ask Photos to skip duplicate checking');
+  assert.match(script, /end timeout/, 'Apple Photos script should close the timeout block');
+
+  const verificationScript = mainProcess.buildPhotosFilenameVerificationScript(files.slice(0, 2));
+  assert.match(verificationScript, /media items whose filename is currentName/, 'Apple Photos verification should query imported filenames');
+  assert.match(verificationScript, /missingNames/, 'Apple Photos verification should return missing filenames');
+
+  const inventoryScript = mainProcess.buildPhotosFilenameInventoryScript();
+  assert.match(inventoryScript, /filename of media items/, 'Apple Photos import should support full filename inventory checks');
+  assert.match(inventoryScript, /linefeed/, 'Apple Photos filename inventory should return one filename per line');
+
+  const videoArgs = mainProcess.buildApplePhotosVideoArgs('/source/snap.mp4', '/dest/snap.mp4', { transcode: false });
+  assert.deepEqual(videoArgs.slice(videoArgs.indexOf('-map'), videoArgs.indexOf('-dn')), ['-map', '0:v:0', '-map', '0:a?'], 'Apple Photos video staging should keep only primary video and optional audio');
+  assert.ok(!videoArgs.includes('0'), 'Apple Photos video staging must not preserve every Snapchat MP4 stream');
+  assert.ok(videoArgs.includes('-dn'), 'Apple Photos video staging should drop data streams');
+}
+
+function testRiskScoreBoundaries() {
+  const risky = importer.calculateRiskScore({
+    verification: {
+      total: 100,
+      withDate: 50,
+      withGps: 10,
+      issueFiles: Array.from({ length: 5 }, () => ({})),
+      warnings: [{}],
+      duplicateFiles: 2
+    },
+    skippedDownloadLinks: [{}, {}],
+    exifWriteWarnings: [{}],
+    mediaRepairResults: [{ repaired: false }]
+  });
+  assert.equal(risky.dateCoverage, 50, 'risk score should expose date coverage');
+  assert.equal(risky.gpsCoverage, 10, 'risk score should expose GPS coverage');
+  assert.equal(risky.level, 'review', 'low date coverage should require review even if issue records are incomplete');
+  assert.ok(risky.score < 80, `low date coverage should not receive a good score, got ${risky.score}`);
+
+  const clean = importer.calculateRiskScore({
+    verification: { total: 2, withDate: 2, withGps: 2, issueFiles: [], warnings: [], duplicateFiles: 0 }
+  });
+  assert.equal(clean.level, 'excellent', 'clean imports should remain excellent');
+  assert.equal(clean.score, 100, 'clean imports should keep a perfect score');
 }
 
 async function testReadableFilenameCollisions(tempRoot) {
@@ -58,6 +153,74 @@ async function testReadableFilenameCollisions(tempRoot) {
     '2024-02-03_04-05-06_snapchat-memory-2.jpg',
     '2024-02-03_04-05-06_snapchat-memory.jpg'
   ]);
+}
+
+async function testFilenameDateFallback(tempRoot) {
+  const fixture = path.join(tempRoot, 'filename-date-fallback');
+  const source = path.join(fixture, 'source');
+  const extractDir = path.join(fixture, 'extract');
+  const mergedDir = path.join(fixture, 'merged');
+  await fs.mkdir(path.join(source, 'memories'), { recursive: true });
+  await fs.mkdir(path.join(source, 'json'), { recursive: true });
+
+  await writeSampleJpeg(path.join(source, 'memories', '2023-04-05_06-07-08_filename-date.jpg'));
+  await fs.writeFile(
+    path.join(source, 'json', 'memories_history.json'),
+    JSON.stringify([
+      { 'File Name': '2023-04-05_06-07-08_filename-date.jpg', Latitude: '40.7128', Longitude: '-74.0060' }
+    ])
+  );
+
+  const zipPath = await zipFixture(source, path.join(fixture, 'snapchat-filename-date.zip'));
+  await fs.mkdir(extractDir, { recursive: true });
+  await extractZip(zipPath, { dir: extractDir });
+  const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+  const verification = await importer.verifyMergedMedia(result.media, 10);
+
+  assert.equal(result.media.length, 1, 'filename fallback fixture should merge one file');
+  assert.equal(result.media[0].dateSource, 'filename', 'missing metadata dates should fall back to filename dates');
+  assert.equal(verification.withDate, 1, 'filename fallback should write an embedded date');
+  assert.equal(verification.issueFiles.filter((item) => item.type === 'missing-date').length, 0, 'filename fallback should prevent missing-date review issue');
+  assert.equal(verification.metadataComparisons[0].dateSource, 'filename', 'metadata inspector should show filename date source');
+  assert.equal(verification.metadataComparisons[0].status.date, 'matched', 'metadata inspector should confirm filename date was written');
+  await assertExif(result.media[0].mergedPath, {
+    datePrefix: '2023:04:05 06:07:08',
+    latitude: 40.7128,
+    longitude: -74.006
+  });
+}
+
+async function testExactDuplicateDetection(tempRoot) {
+  const fixture = path.join(tempRoot, 'exact-duplicates');
+  const source = path.join(fixture, 'source');
+  const extractDir = path.join(fixture, 'extract');
+  const mergedDir = path.join(fixture, 'merged');
+  await fs.mkdir(path.join(source, 'memories'), { recursive: true });
+  await fs.mkdir(path.join(source, 'json'), { recursive: true });
+
+  await writeSampleJpeg(path.join(source, 'memories', 'dupe-a.jpg'));
+  await writeSampleJpeg(path.join(source, 'memories', 'dupe-b.jpg'));
+  await fs.writeFile(
+    path.join(source, 'json', 'memories_history.json'),
+    JSON.stringify([
+      { Date: '2024-02-03T04:05:06.000Z', 'File Name': 'dupe-a.jpg' },
+      { Date: '2024-02-03T04:05:06.000Z', 'File Name': 'dupe-b.jpg' }
+    ])
+  );
+
+  const zipPath = await zipFixture(source, path.join(fixture, 'snapchat-duplicate-media.zip'));
+  await fs.mkdir(extractDir, { recursive: true });
+  await extractZip(zipPath, { dir: extractDir });
+  const result = await importer.prepareMergedMedia({ extractedDir: extractDir, mergedDir });
+  const verification = await importer.verifyMergedMedia(result.media, 10);
+  const review = await importer.createReviewArtifacts({ mergedDir, media: result.media, verification });
+
+  assert.equal(result.media.length, 2, 'duplicate fixture should merge both files before cleanup');
+  assert.equal(verification.duplicateFiles, 1, 'exact duplicate detector should mark one removable candidate');
+  assert.equal(verification.duplicateFileGroups.length, 1, 'exact duplicate detector should group matching files');
+  assert.ok(verification.duplicateFileGroups[0].keeper.path, 'duplicate group should preserve a keeper');
+  assert.equal(verification.duplicateFileGroups[0].duplicates.length, 1, 'duplicate group should expose one trash candidate');
+  assert.ok(fss.existsSync(review.duplicateReportPath), 'duplicate review report should be written');
 }
 
 async function testDamagedVideoRepairIsReported(tempRoot) {
@@ -237,6 +400,15 @@ async function testZipWithEmbeddedMedia(tempRoot) {
   assert.equal(verification.timeline.oldest, '2024-01-02T03:04:05.000Z', 'timeline audit should capture oldest date');
   assert.equal(verification.timeline.newest, '2024-01-02T03:04:05.000Z', 'timeline audit should capture newest date');
   assert.equal(verification.timeline.byYear['2024'], 1, 'timeline audit should count files by year');
+  assert.equal(verification.metadataComparisons.length, 1, 'metadata inspector should include a before/after sample');
+  assert.equal(verification.metadataComparisons[0].snapchat.date, '2024-01-02T03:04:05.000Z', 'metadata inspector should show Snapchat source date');
+  assert.equal(verification.metadataComparisons[0].status.date, 'matched', 'metadata inspector should confirm merged date match');
+  assert.equal(verification.metadataComparisons[0].status.gps, 'matched', 'metadata inspector should confirm merged GPS match');
+  const riskScore = importer.calculateRiskScore({ verification });
+  const albumPlan = importer.buildAlbumPlan(result.media);
+  assert.equal(riskScore.level, 'excellent', 'clean imports should receive an excellent risk score');
+  assert.equal(albumPlan.length, 1, 'album plan should group dated memories by month');
+  assert.equal(albumPlan[0].title, 'Snapchat Memories 2024-01', 'album plan should use readable monthly titles');
   await assertExif(result.media[0].mergedPath, {
     datePrefix: '2024:01:02 03:04:05',
     latitude: 43.6532,

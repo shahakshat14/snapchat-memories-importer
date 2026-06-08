@@ -12,10 +12,14 @@ const volumeName = 'Snapchat Memories Importer 0.1.0';
 const tempDmg = path.join(os.tmpdir(), `snapchat-memories-${Date.now()}.dmg`);
 const signingIdentity = process.env.MAC_SIGN_IDENTITY || '-';
 const isAdHocSign = signingIdentity === '-';
+const entitlementsPath = path.join(root, 'build', 'entitlements.mac.plist');
 
 run('npx', ['electron-builder', '--mac', 'dir', '--universal', '--publish', 'never'], { cwd: root });
 verifyUniversalBinary(appExecutable);
 run('/usr/bin/xattr', ['-cr', appDir]);
+removeFinderInfo(appDir);
+rewriteBundleWithoutResourceForks(appDir);
+stripBundleDetritus(appDir);
 run('/usr/bin/codesign', codeSignArgs(appDir));
 removeFinderInfo(appDir);
 run('/usr/bin/codesign', ['--verify', '--deep', '--verbose=2', appDir]);
@@ -40,8 +44,7 @@ const mountPoint = attachDmg(tempDmg);
 try {
   const mountedAppDir = path.join(mountPoint, 'Snapchat Memories Importer.app');
   run('/usr/bin/ditto', [appDir, mountedAppDir]);
-  run('/usr/bin/xattr', ['-cr', mountedAppDir]);
-  removeFinderInfo(mountedAppDir);
+  stripBundleDetritus(mountedAppDir);
   run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', mountedAppDir]);
 } finally {
   run('/usr/bin/hdiutil', ['detach', mountPoint]);
@@ -62,7 +65,10 @@ function run(command, args, options = {}) {
 
 function codeSignArgs(target) {
   const args = ['--force', '--deep', '--sign', signingIdentity];
-  if (!isAdHocSign) args.push('--options', 'runtime', '--timestamp');
+  if (!isAdHocSign) {
+    args.push('--options', 'runtime', '--timestamp');
+    if (fs.existsSync(entitlementsPath)) args.push('--entitlements', entitlementsPath);
+  }
   args.push(target);
   return args;
 }
@@ -74,6 +80,26 @@ function removeFinderInfo(target) {
   for (const file of files) {
     execFileSync('/usr/bin/xattr', ['-d', 'com.apple.FinderInfo', file], { stdio: 'ignore' });
   }
+}
+
+function stripBundleDetritus(target) {
+  run('/usr/bin/xattr', ['-cr', target]);
+  removeFinderInfo(target);
+  const appleDoubleFiles = execFileSync('/usr/bin/find', [target, '-name', '._*', '-print'], { encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean);
+  for (const file of appleDoubleFiles) {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+function rewriteBundleWithoutResourceForks(target) {
+  const tempTarget = path.join(os.tmpdir(), `snapchat-clean-${Date.now()}.app`);
+  fs.rmSync(tempTarget, { recursive: true, force: true });
+  run('/usr/bin/ditto', ['--norsrc', target, tempTarget]);
+  fs.rmSync(target, { recursive: true, force: true });
+  run('/usr/bin/ditto', ['--norsrc', tempTarget, target]);
+  fs.rmSync(tempTarget, { recursive: true, force: true });
 }
 
 function imageSizeMegabytes(target) {

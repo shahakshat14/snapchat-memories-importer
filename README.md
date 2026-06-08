@@ -9,6 +9,15 @@ Website: [https://shahakshat14.github.io/snapchat-memories-importer/](https://sh
 - [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-0.1.0.dmg)
 - [Download for Windows (.exe)](https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-Setup-0.1.0.exe)
 
+Checksums for the current beta:
+
+```text
+macOS DMG    SHA-256 e3c1e6e055209e8dcb058168e13ca027089dafdeb6e83444e3e13f5cfc021e82
+Windows EXE  SHA-256 b5bfe7f81c8cde628c5df1c5347ded2bfe302322b7c285da1005109afbe0a342
+```
+
+The website reads the latest GitHub Release at load time and updates download buttons/checksums when a new release is published.
+
 ### macOS beta install note
 
 The free GitHub beta build is not Apple-notarized yet, so macOS may show **"Apple could not verify Snapchat Memories Importer is free of malware"**. This does not mean the app failed to install; it means the app was downloaded outside the Mac App Store and is not notarized with a paid Apple Developer ID certificate.
@@ -56,6 +65,8 @@ Google Photos upload is not anonymous. After the preview is approved, click **Go
 
 Release builds should bundle the app's Google OAuth Desktop client so that Google login opens directly. Users should not need to choose an OAuth JSON file.
 
+Community builds without bundled OAuth can still export a merged ZIP and import into Apple Photos. Google Photos direct upload is disabled until OAuth is configured. See [docs/GOOGLE_PHOTOS_OAUTH.md](docs/GOOGLE_PHOTOS_OAUTH.md).
+
 To configure a build:
 
 1. Go to Google Cloud Console.
@@ -84,6 +95,18 @@ npm run qa
 ```
 
 The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP metadata, verifies the preview summary, exports a merged zip, re-extracts it, and reads the output back with ExifTool. It covers media embedded in the zip, metadata-only exports with download links, and multiple `mydata` zip files with duplicate internal paths.
+
+Public releases should also follow [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md).
+
+## Support
+
+Use **Support Bundle** in the app when reporting issues. It exports app/version/system details, public preview counts, failed filenames, and report paths without including photo contents, OAuth tokens, or Snapchat export archives.
+
+GitHub issue templates are available for import failures, Apple Photos rejected files, Google Photos upload issues, and metadata/date problems.
+
+## Updates
+
+For now, download new versions from [GitHub Releases](https://github.com/shahakshat14/snapchat-memories-importer/releases). Full automatic updates are planned after signing and release discipline are stable; see [docs/AUTO_UPDATE_PLAN.md](docs/AUTO_UPDATE_PLAN.md).
 
 ## Build DMG
 

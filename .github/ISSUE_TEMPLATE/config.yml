@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Mac install guide
+    url: https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/MAC_INSTALL.md
+    about: Help with Gatekeeper and Open Anyway.
+  - name: Windows install guide
+    url: https://github.com/shahakshat14/snapchat-memories-importer/blob/main/docs/WINDOWS_INSTALL.md
+    about: Help with SmartScreen and Run anyway.

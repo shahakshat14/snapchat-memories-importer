@@ -1,0 +1,23 @@
+name: Apple Photos rejected files
+description: Report files Apple Photos could not import.
+title: "Apple Photos rejected files: "
+labels: ["bug", "apple-photos"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+  - type: textarea
+    id: counts
+    attributes:
+      label: Import counts
+      description: Include imported, skipped, failed, and accounted counts from the final report.
+  - type: textarea
+    id: rejected
+    attributes:
+      label: Rejected filenames
+      description: Paste filenames only. Do not attach private media.

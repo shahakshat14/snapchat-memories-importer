@@ -1,0 +1,25 @@
+name: Google Photos upload issue
+description: Report Google login, quota, permission, or upload problems.
+title: "Google Photos upload issue: "
+labels: ["bug", "google-photos"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: App version
+  - type: dropdown
+    id: oauth
+    attributes:
+      label: Google sign-in status
+      options:
+        - Login opened in browser
+        - OAuth not configured
+        - Permission or quota error
+        - Upload started then failed
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: Paste the exact message from the app.
+    validations:
+      required: true

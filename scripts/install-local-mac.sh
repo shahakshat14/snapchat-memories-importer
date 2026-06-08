@@ -36,6 +36,7 @@ ditto "${APP_SRC}" "${APP_DEST}"
 # Local development builds are ad-hoc signed, not notarized. Clearing quarantine
 # lets this trusted local install launch on the development Mac.
 xattr -dr com.apple.quarantine "${APP_DEST}" >/dev/null 2>&1 || true
+find "${APP_DEST}" -xattrname com.apple.FinderInfo -print0 | xargs -0 -I{} xattr -d com.apple.FinderInfo "{}" >/dev/null 2>&1 || true
 codesign --verify --deep --strict "${APP_DEST}"
 
 open -a "${APP_DEST}"
