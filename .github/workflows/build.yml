@@ -52,7 +52,7 @@ jobs:
           GOOGLE_OAUTH_CLIENT_JSON: ${{ secrets.GOOGLE_OAUTH_CLIENT_JSON }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-        run: npm run prepare:google-auth
+        run: npm run prepare:google-auth --if-present
       - name: Build ad-hoc macOS DMG
         if: ${{ env.MAC_SIGN_IDENTITY == '' }}
         run: CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac
@@ -97,7 +97,7 @@ jobs:
           GOOGLE_OAUTH_CLIENT_JSON: ${{ secrets.GOOGLE_OAUTH_CLIENT_JSON }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-        run: npm run prepare:google-auth
+        run: npm run prepare:google-auth --if-present
       - run: npm run dist:win
       - uses: actions/upload-artifact@v7
         with:
