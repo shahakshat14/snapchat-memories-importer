@@ -126,7 +126,6 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "Snapchat Memories Importer ${TAG_NAME#v} Beta" \
             --notes-file RELEASE_NOTES.md \
-            --prerelease \
             --latest || \
           gh release upload "$TAG_NAME" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \

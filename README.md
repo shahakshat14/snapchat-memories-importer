@@ -4,8 +4,8 @@ A desktop app that imports a Snapchat data export into Google Photos, Apple Phot
 
 ## Direct Downloads
 
-- [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-0.1.0.dmg)
-- [Download for Windows (.exe)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-Setup-0.1.0.exe)
+- [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-0.1.0.dmg)
+- [Download for Windows (.exe)](https://github.com/shahakshat14/snapchat-memories-importer/releases/download/v0.1.0/Snapchat-Memories-Importer-Setup-0.1.0.exe)
 
 ### macOS beta install note
 
