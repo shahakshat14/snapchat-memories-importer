@@ -7,7 +7,20 @@ A desktop app that imports a Snapchat data export into Google Photos, Apple Phot
 - [Download for macOS (.dmg)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-0.1.0.dmg)
 - [Download for Windows (.exe)](https://github.com/shahakshat14/snapchat-memories-importer/releases/latest/download/Snapchat-Memories-Importer-Setup-0.1.0.exe)
 
-The macOS DMG is universal for Intel and Apple Silicon Macs. It requires macOS 12 Monterey or newer because Electron 39 relies on Chromium versions that no longer support Big Sur or older macOS releases. The macOS build must be signed with an Apple Developer ID certificate and notarized by Apple to avoid Gatekeeper's malware verification warning. Development builds are ad-hoc signed and may require right-clicking the app and choosing **Open**, or allowing it from Privacy & Security settings.
+### macOS beta install note
+
+The free GitHub beta build is not Apple-notarized yet, so macOS may show **"Apple could not verify Snapchat Memories Importer is free of malware"**. This does not mean the app failed to install; it means the app was downloaded outside the Mac App Store and is not notarized with a paid Apple Developer ID certificate.
+
+To open it on macOS:
+
+1. Download the `.dmg`.
+2. Open the `.dmg` and drag **Snapchat Memories Importer** into **Applications**.
+3. In **Applications**, right-click or Control-click the app and choose **Open**.
+4. If macOS still blocks it, open **System Settings > Privacy & Security**, scroll to the security message for Snapchat Memories Importer, and choose **Open Anyway**.
+
+Full Mac instructions: [docs/MAC_INSTALL.md](docs/MAC_INSTALL.md).
+
+The macOS DMG is universal for Intel and Apple Silicon Macs. It requires macOS 12 Monterey or newer because Electron 39 relies on Chromium versions that no longer support Big Sur or older macOS releases.
 
 The app can ask for:
 
@@ -24,19 +37,19 @@ After reviewing the preview, you can:
 
 ## Google Photos Login
 
-Google Photos upload is not anonymous. Click **Sign in with Google Photos** to open the Google login page.
+Google Photos upload is not anonymous. After the preview is approved, click **Google Photos** or **Upload to Google Photos**. The app opens Google login in your browser, waits for the login to finish, then uploads the reviewed files automatically.
 
-Developer builds need a one-time OAuth client setup before Google can show that login page. If the app does not already have a saved or bundled OAuth client, it will ask for a Google OAuth Desktop client JSON once, then remember it locally for future logins.
+Release builds should bundle the app's Google OAuth Desktop client so that Google login opens directly. Users should not need to choose an OAuth JSON file.
 
-To create that setup file:
+To configure a build:
 
 1. Go to Google Cloud Console.
 2. Enable **Google Photos Library API**.
 3. Create an OAuth client for **Desktop app**.
 4. Download the JSON file.
-5. Select that JSON only if the app asks for one-time Google sign-in setup.
+5. Add the full JSON as the `GOOGLE_OAUTH_CLIENT_JSON` GitHub Actions secret, or set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`.
 
-Release builds can avoid the one-time setup prompt by bundling a private `config/google-oauth-client.json` at build time or setting `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in the build environment.
+Local builds can run `npm run prepare:google-auth` with those same environment variables before packaging. The script writes `config/google-oauth-client.json`, which is bundled into the app but ignored by git.
 
 The app requests only `https://www.googleapis.com/auth/photoslibrary.appendonly`.
 
@@ -60,6 +73,7 @@ The QA script creates Snapchat-style zip files, extracts them, merges EXIF/XMP m
 ## Build DMG
 
 ```bash
+npm run icons:generate
 npm run dist:mac
 ```
 
@@ -70,22 +84,39 @@ Local DMGs are ad-hoc signed unless you provide Developer ID signing and notariz
 For a Gatekeeper-friendly public release, install a **Developer ID Application** certificate in the build machine keychain and run:
 
 ```bash
+npm run signing:doctor -- --mac
+
 MAC_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
 APPLE_ID="apple-id@example.com" \
 APPLE_APP_SPECIFIC_PASSWORD="app-specific-password" \
 APPLE_TEAM_ID="TEAMID" \
-npm run dist:mac
+npm run dist:mac:signed
 ```
 
 You can also set `APPLE_NOTARY_PROFILE` instead of the Apple ID, app-specific password, and team ID values if you already stored notarytool credentials in the keychain.
 
+Signed macOS builds use `build/icon.icns`, hardened runtime entitlements from `build/entitlements.mac.plist`, `xcrun notarytool submit --wait`, and `xcrun stapler`.
+
 ## Build Windows EXE
 
 ```bash
+npm run icons:generate
 npm run dist:win
 ```
 
 The Windows installer will be created in `dist/`. The easiest supported way to build the Windows EXE is on Windows or through the included GitHub Actions workflow.
+
+For a trusted Windows public release, provide an Authenticode code-signing certificate and run:
+
+```bash
+npm run signing:doctor -- --win
+
+CSC_LINK="path-or-base64-p12" \
+CSC_KEY_PASSWORD="certificate-password" \
+npm run dist:win:signed
+```
+
+Windows builds use `build/icon.ico`. Unsigned installers may still trigger SmartScreen reputation warnings until a trusted certificate and reputation are established.
 
 ## Google Photos API Notes
 
